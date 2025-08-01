@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 7d0fbacecb77d1145b4670426058d85a
+timeCreated: 1629415004
+licenseType: Store
+NativeFormatImporter:
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 202117
+  packageName: POLYGON Icons Pack - Low Poly 3D Art by Synty
+  packageVersion: 1.1.2
+  assetPath: Assets/PolygonIcons/Prefabs/SM_Icon_Crafting_Plank_01.prefab
+  uploadId: 756034
