@@ -2,6 +2,8 @@
 using UnityEngine.UI;
 using TMPro;
 using Unity.Collections;
+using System.Collections.Generic;
+using Unity.Netcode;
 
 public class UIManagerNet : MonoBehaviour
 {
@@ -12,6 +14,7 @@ public class UIManagerNet : MonoBehaviour
     public TMP_Text resultadoText;
     public TMP_Text temporizadorText;
     public Button repartirCartasButton;
+    public GameObject botonVotoPrefab; // Prefab del botón de voto
 
     void Awake()
     {
@@ -38,19 +41,18 @@ public class UIManagerNet : MonoBehaviour
         Debug.Log($"Carta mostrada: {carta.ToString()}");
         Debug.Log(cartaText);
         cartaText.text = $"Tu carta: {carta.ToString()}";
-    }
-
-
-    public void EnviarPalabra(TMP_InputField input)
-    {
-        string palabra = input.text;
-        GameManager.Instance.EnviarPalabraServerRpc(palabra);
+        resultadoText.text = "WAITING FOR PLAYERS TO VOTE"; // Limpiar resultado anterior
     }
 
     public void VotarJugador(ulong id)
     {
         GameManager.Instance.EnviarVotoServerRpc(id);
         votacionPanel.SetActive(false);
+    }
+
+    public void Empate(string empate_text)
+    {
+        resultadoText.text = empate_text;
     }
 
     public void MostrarResultado(bool acertaron, string votado, string impostor)
@@ -71,9 +73,25 @@ public class UIManagerNet : MonoBehaviour
        temporizadorText.text = Mathf.CeilToInt(tiempo).ToString(); // por ejemplo
     }
 
-    public void MostrarPanelVotacion()
+    public void MostrarPanelVotacion(List<ulong> jugadores)
     {
-        // Mostrar botones o UI para votar por jugadores
+        Debug.Log("MostrarPanelVotacion");
+        // Limpia botones anteriores
+        foreach (Transform child in votacionPanel.transform)
+            Destroy(child.gameObject);
+
+        // Crea un botón por cada jugador
+        foreach (ulong id in jugadores)
+        {
+            var botonObj = Instantiate(botonVotoPrefab, votacionPanel.transform);
+            var texto = botonObj.GetComponentInChildren<TMPro.TMP_Text>();
+            texto.text = $"Jugador {id}";
+            var boton = botonObj.GetComponent<Button>();
+            ulong idCopia = id; // Necesario para la closure
+            boton.onClick.AddListener(() => VotarJugador(idCopia));
+        }
+
+        votacionPanel.SetActive(true);
     }
 
 }

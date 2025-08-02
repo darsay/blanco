@@ -2,6 +2,7 @@ using Unity.Netcode;
 using UnityEngine;
 using System.Collections.Generic;
 using Unity.Collections;
+using System.Linq;
 
 public class GameManager : NetworkBehaviour
 {
@@ -94,29 +95,12 @@ public class GameManager : NetworkBehaviour
         }
 
         estadoActual.Value = Estado.EnviandoPalabras;
+        // TODO DEJAR UN TIEMPO PARA QUE LOS JUGADORES VEAN SUS CARTAS Y HABLEN
+        estadoActual.Value = Estado.Votando;
+        MostrarPanelVotacionClientRpc(NetworkManager.ConnectedClientsIds.ToArray());
+        // EmpezarVotacion();
     }
 
-    // Cambiar esto, no se dicen las palabras, es todo oral.
-    [ServerRpc(RequireOwnership = false)]
-    public void EnviarPalabraServerRpc(string palabra, ServerRpcParams rpcParams = default)
-    {
-        ulong clientId = rpcParams.Receive.SenderClientId;
-
-        if (!palabrasRecibidas.ContainsKey(clientId))
-        {
-            palabrasRecibidas[clientId] = palabra;
-            Debug.Log($"Jugador {clientId} dijo: {palabra}");
-
-            if (palabrasRecibidas.Count == NetworkManager.ConnectedClientsIds.Count)
-            {
-                estadoActual.Value = Estado.Votando;
-
-                tiempoRestante = tiempoVotacion;
-                votacionActiva = true;
-                UIManagerNet.Instance.MostrarPanelVotacion();
-            }
-        }
-    }
 
     [ServerRpc(RequireOwnership = false)]
     public void EnviarVotoServerRpc(ulong votadoId, ServerRpcParams rpcParams = default)
@@ -149,24 +133,48 @@ public class GameManager : NetworkBehaviour
             conteo[votado]++;
         }
 
-        // Buscar el más votado
-        ulong masVotado = 0;
+        // Buscar el/los más votados
         int max = -1;
+        List<ulong> masVotados = new();
 
         foreach (var kvp in conteo)
         {
             if (kvp.Value > max)
             {
                 max = kvp.Value;
-                masVotado = kvp.Key;
+                masVotados.Clear();
+                masVotados.Add(kvp.Key);
+            }
+            else if (kvp.Value == max)
+            {
+                masVotados.Add(kvp.Key);
             }
         }
 
-        bool acertaron = (masVotado == (ulong)impostorId.Value);
-        string nombreImpostor = "Jugador " + impostorId.Value;
-        string nombreVotado = "Jugador " + masVotado;
+        bool hayEmpate = masVotados.Count > 1;
+        string resultadoEmpate = "";
 
-        MostrarResultadoClientRpc(acertaron, nombreVotado, nombreImpostor);
+        if (hayEmpate)
+        {
+            resultadoEmpate = "Empate entre: " + string.Join(", ", masVotados.Select(id => "Jugador " + id));
+            Debug.Log("Empate en la votación. " + resultadoEmpate);
+            MostrarEmpateClientRpc(resultadoEmpate);
+            // Aquí puedes decidir qué hacer en caso de empate (por ejemplo, no eliminar a nadie, elegir aleatorio, etc.)
+        }
+        else
+        {
+            ulong masVotado = masVotados[0];
+            bool acertaron = (masVotado == (ulong)impostorId.Value);
+            string nombreImpostor = "Jugador " + impostorId.Value;
+            string nombreVotado = "Jugador " + masVotado;
+
+            Debug.Log($"Resultado de la ronda: acertaron={acertaron}, votado={nombreVotado}, impostor={nombreImpostor}");
+
+            MostrarResultadoClientRpc(acertaron, nombreVotado, nombreImpostor);
+        }
+
+        // Puedes mostrar el resultado de empate a los clientes si lo deseas
+        // MostrarEmpateClientRpc(resultadoEmpate);
 
         // Reiniciar juego tras 10 segundos
         Invoke(nameof(ReiniciarJuego), 10f);
@@ -197,6 +205,12 @@ public class GameManager : NetworkBehaviour
         UIManagerNet.Instance.MostrarResultado(acertaron, votado, impostor);
     }
 
+    [ClientRpc]
+    void MostrarEmpateClientRpc(string empate)
+    {
+        UIManagerNet.Instance.Empate(empate);
+    }
+
     public void RepartirCartas()
     {
         if (!IsServer) return;
@@ -224,6 +238,12 @@ public class GameManager : NetworkBehaviour
     void ActualizarTemporizadorClientRpc(float tiempoRestante)
     {
         UIManagerNet.Instance.ActualizarTemporizador(tiempoRestante);
+    }
+
+    [ClientRpc]
+    void MostrarPanelVotacionClientRpc(ulong[] jugadores)
+    {
+        UIManagerNet.Instance.MostrarPanelVotacion(new List<ulong>(jugadores));
     }
 
 }
