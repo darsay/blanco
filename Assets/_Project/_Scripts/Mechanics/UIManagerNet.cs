@@ -10,6 +10,7 @@ public class UIManagerNet : MonoBehaviour
     public TMP_Text cartaText;
     public GameObject votacionPanel;
     public TMP_Text resultadoText;
+    public TMP_Text temporizadorText;
     public Button repartirCartasButton;
 
     void Awake()
@@ -39,11 +40,6 @@ public class UIManagerNet : MonoBehaviour
         cartaText.text = $"Tu carta: {carta.ToString()}";
     }
 
-    public void MostrarPalabraRemota(ulong id, FixedString32Bytes palabra)
-    {
-        Debug.Log($"Jugador {id}: {palabra.ToString()}");
-        // Aquí puedes instanciar un prefab o actualizar una lista visual.
-    }
 
     public void EnviarPalabra(TMP_InputField input)
     {
@@ -69,4 +65,15 @@ public class UIManagerNet : MonoBehaviour
         if (GameManager.Instance != null)
             GameManager.Instance.RepartirCartas();
     }
+
+    public void ActualizarTemporizador(float tiempo)
+    {
+       temporizadorText.text = Mathf.CeilToInt(tiempo).ToString(); // por ejemplo
+    }
+
+    public void MostrarPanelVotacion()
+    {
+        // Mostrar botones o UI para votar por jugadores
+    }
+
 }

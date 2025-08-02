@@ -28,6 +28,11 @@ public class GameManager : NetworkBehaviour
     public int jugadoresNecesarios = 4;
     public UIManagerNet uiManager;
 
+    [Header("Temporizador")]
+    public float tiempoVotacion = 30f; // duración en segundos
+    public float tiempoRestante = 0f;
+    public bool votacionActiva = false;
+
     void Awake()
     {
         Instance = this;
@@ -63,11 +68,15 @@ public class GameManager : NetworkBehaviour
         impostorId.Value = (int)jugadores[Random.Range(0, jugadores.Count)];
 
         cartaComun = cartasDisponibles[Random.Range(0, cartasDisponibles.Count)];
+        cartaImpostor = "BLANCO";
+        // MODO COOPERATIVO:
+        /*
         cartaImpostor = cartasDisponibles[Random.Range(0, cartasDisponibles.Count)];
-        while (cartaImpostor.Equals(cartaComun))
-        {
-            cartaImpostor = cartasDisponibles[Random.Range(0, cartasDisponibles.Count)];
-        }
+         while (cartaImpostor.Equals(cartaComun))
+              {
+         cartaImpostor = cartasDisponibles[Random.Range(0, cartasDisponibles.Count)];
+           }
+        */
         NetworkManager.OnClientConnectedCallback += OnClienteConectado;
         UIManagerNet.Instance.ShowRepartir();
         
@@ -87,6 +96,7 @@ public class GameManager : NetworkBehaviour
         estadoActual.Value = Estado.EnviandoPalabras;
     }
 
+    // Cambiar esto, no se dicen las palabras, es todo oral.
     [ServerRpc(RequireOwnership = false)]
     public void EnviarPalabraServerRpc(string palabra, ServerRpcParams rpcParams = default)
     {
@@ -101,10 +111,9 @@ public class GameManager : NetworkBehaviour
             {
                 estadoActual.Value = Estado.Votando;
 
-                foreach (var kvp in palabrasRecibidas)
-                {
-                    EnviarPalabraClientRpc(kvp.Key, kvp.Value);
-                }
+                tiempoRestante = tiempoVotacion;
+                votacionActiva = true;
+                UIManagerNet.Instance.MostrarPanelVotacion();
             }
         }
     }
@@ -181,11 +190,6 @@ public class GameManager : NetworkBehaviour
         UIManagerNet.Instance.MostrarCarta(carta);
     }
 
-    [ClientRpc]
-    void EnviarPalabraClientRpc(ulong jugadorId, FixedString32Bytes palabra)
-    {
-        UIManagerNet.Instance.MostrarPalabraRemota(jugadorId, palabra);
-    }
 
     [ClientRpc]
     void MostrarResultadoClientRpc(bool acertaron, string votado, string impostor)
@@ -198,4 +202,28 @@ public class GameManager : NetworkBehaviour
         if (!IsServer) return;
         ComenzarJuego();
     }
+
+    void Update()
+    {
+        if (!IsServer || !votacionActiva || estadoActual.Value != Estado.Votando)
+            return;
+
+        tiempoRestante -= Time.deltaTime;
+
+        // Opcional: informar a los clientes cuánto tiempo queda
+        ActualizarTemporizadorClientRpc(tiempoRestante);
+
+        if (tiempoRestante <= 0f)
+        {
+            votacionActiva = false;
+            FinalizarRonda();
+        }
+    }
+
+    [ClientRpc]
+    void ActualizarTemporizadorClientRpc(float tiempoRestante)
+    {
+        UIManagerNet.Instance.ActualizarTemporizador(tiempoRestante);
+    }
+
 }
