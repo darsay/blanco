@@ -1,13 +1,20 @@
 using Unity.Netcode;
 using UnityEngine;
 using System.Collections.Generic;
+using static MatchManager;
 
 public class PlayerSpawner : NetworkBehaviour
 {
+    public static PlayerSpawner Instance;
     [SerializeField] private List<Transform> spawnPoints;
     [SerializeField] private Transform lookAtTarget;
-    [SerializeField] private GameObject playerPrefab;
+    [SerializeField] private PlayerController playerPrefab;
     private int nextSpawnIndex = 0;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
 
     public void SpawnHostPlayer()
     {
@@ -35,7 +42,6 @@ public class PlayerSpawner : NetworkBehaviour
 
     private void HandleClientConnected(ulong clientId)
     {
-        // Aquí sí filtramos
         if (!IsServer)
             return;
 
@@ -46,7 +52,7 @@ public class PlayerSpawner : NetworkBehaviour
 
         Transform spawnPoint = GetNextSpawnPoint();
 
-        GameObject playerInstance = Instantiate(playerPrefab, spawnPoint.position, spawnPoint.rotation);
+        GameObject playerInstance = Instantiate(playerPrefab.gameObject, spawnPoint.position, spawnPoint.rotation);
         Vector3 direction = (lookAtTarget.position - spawnPoint.position).normalized;
         Quaternion lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
         playerInstance.transform.rotation = lookRotation;

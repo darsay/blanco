@@ -1,4 +1,5 @@
 using DG.Tweening;
+using System;
 using Unity.Cinemachine;
 using Unity.Netcode;
 using UnityEngine;
@@ -35,6 +36,11 @@ public class LocalPlayerController : NetworkBehaviour
     {
         if (!IsOwner) return;
 
+        if(IsServer && MatchManager.Instance.currentState.Value == MatchManager.MatchState.WaitingForPlayers)
+        {
+            HandleBeginingMatch();
+        }
+
         HandlePointing();
         HandleSeeCard();
 
@@ -48,6 +54,14 @@ public class LocalPlayerController : NetworkBehaviour
         verticalRotation = Mathf.Clamp(verticalRotation, minVerticalAngle, maxVerticalAngle);
 
         playerCamera.transform.localRotation = Quaternion.Euler(verticalRotation, horizontalRotation, 0f);
+    }
+
+    private void HandleBeginingMatch()
+    {
+        if(Input.GetKeyDown(KeyCode.Space))
+        {
+            MatchManager.Instance.OnBeginMatch();
+        }
     }
 
     void HandlePointing()
@@ -66,15 +80,24 @@ public class LocalPlayerController : NetworkBehaviour
 
     void HandleSeeCard()
     {
+        if(RoundManager.Instance.currentState.Value == RoundManager.RoundState.Inactive)
+            return;
+
         if (Input.GetMouseButtonDown(0))
         {
-            playerActionsSync.isPlayerCheckingCard.Value = true;
-            DOTween.To(() => LeftHandRig.weight, x => LeftHandRig.weight = x, 1f, 0.3f);
+           SeeCard(true);
         }
         else if (Input.GetMouseButtonUp(0))
         {
-            playerActionsSync.isPlayerCheckingCard.Value = false;
-            DOTween.To(() => LeftHandRig.weight, x => LeftHandRig.weight = x, 0f, 0.3f);
+            SeeCard(false);
         }
+    }
+
+    public void SeeCard(bool show)
+    {
+        var targetValue = show ? 1f : 0f;
+
+        playerActionsSync.isPlayerCheckingCard.Value = show;
+        DOTween.To(() => LeftHandRig.weight, x => LeftHandRig.weight = x, targetValue, 0.3f);
     }
 }
