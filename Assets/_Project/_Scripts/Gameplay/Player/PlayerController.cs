@@ -1,3 +1,5 @@
+using System;
+using TMPro;
 using Unity.Cinemachine;
 using Unity.Collections;
 using Unity.Netcode;
@@ -15,6 +17,12 @@ public class PlayerController : NetworkBehaviour
     [Header("Player Prefabs")]
     [SerializeField] GameObject owningPlayer;
     [SerializeField] GameObject nonOwningPlayer;
+
+    [Header("Player Controllers")]
+    [SerializeField] LocalPlayerController localPlayerController;
+
+    [SerializeField]
+    PlayerTag playerTag;
 
 
     public CardController Card;
@@ -41,6 +49,8 @@ public class PlayerController : NetworkBehaviour
             playerCamera.enabled = false;
             Card = nonOwningCard;
         }
+
+        SetPlayerName($"Player {OwnerClientId}");
     }
 
     [ClientRpc]
@@ -48,7 +58,7 @@ public class PlayerController : NetworkBehaviour
     {
         if(!IsOwner) return;
 
-        if (OwnerClientId.Equals(RoundManager.Instance.blancoPlayerId.Value))
+        if (OwnerClientId == blancoId)
         {
             Card.SetWord("Blanco");
         }
@@ -59,4 +69,17 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
+    public void SetPlayerName(string name)
+    {
+        playerTag.SetName(name);
+    }
+
+    [ClientRpc]
+    public void ShowCardClientRpc(bool show)
+    {
+        if (IsOwner)
+        {
+            localPlayerController.SeeCard(show);
+        }
+    }
 }

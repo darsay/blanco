@@ -2,18 +2,18 @@ using UnityEngine;
 
 public class LookAtCamera : MonoBehaviour
 {
-    private Transform mainCamera;
+    private Camera mainCamera = null;
 
-    void Start()
+    public void SetCamera(Camera camera)
     {
-        mainCamera = Camera.main.transform;
+        mainCamera = camera;
     }
 
     void Update()
     {
         if (mainCamera == null) return;
 
-        Vector3 targetPosition = mainCamera.position;
+        Vector3 targetPosition = mainCamera.transform.position;
 
         targetPosition.y = transform.position.y;
 

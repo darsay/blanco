@@ -80,7 +80,7 @@ public class LocalPlayerController : NetworkBehaviour
 
     void HandleSeeCard()
     {
-        if(RoundManager.Instance.currentState.Value == RoundManager.RoundState.Inactive)
+        if(RoundManager.Instance.currentState.Value != RoundManager.RoundState.Talking)
             return;
 
         if (Input.GetMouseButtonDown(0))

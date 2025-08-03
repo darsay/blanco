@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -9,7 +11,7 @@ public class RoundManager : NetworkBehaviour
 
     public WordListSO wordList;
 
-    public enum RoundState : byte { Inactive, ShowingCards, Talking, Voting, Result }
+    public enum RoundState : byte { Inactive, ShowingCards, SayWord, Talking, Voting, Result }
     public NetworkVariable<RoundState> currentState = new NetworkVariable<RoundState>(RoundState.Inactive, writePerm: NetworkVariableWritePermission.Server);
     public NetworkVariable<FixedString32Bytes> chosenWord = new NetworkVariable<FixedString32Bytes>(default, writePerm: NetworkVariableWritePermission.Server);
     public NetworkVariable<ulong> blancoPlayerId = new NetworkVariable<ulong>(default, writePerm: NetworkVariableWritePermission.Server);
@@ -32,6 +34,61 @@ public class RoundManager : NetworkBehaviour
         PickBlancoPlayer();
         SetCardsValues();
         currentState.Value = RoundState.ShowingCards;
+
+        StartCoroutine(ShowCardsCoroutine());
+    }
+
+    IEnumerator ShowCardsCoroutine()
+    {
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            var player = client.PlayerObject.GetComponent<PlayerController>();
+
+            if (player != null)
+            {
+                UIManager.Instance.SetInfoTextClientRpc($"Player {client.ClientId}'s card has been revealed!");
+                player.ShowCardClientRpc(true);
+                yield return new WaitForSeconds(3f);
+                player.ShowCardClientRpc(false);
+                yield return new WaitForSeconds(1f);
+            }
+        }
+
+        UIManager.Instance.HideInfoTextClientRpc();
+        StartCoroutine(SayWordCoroutine());
+    }
+
+    IEnumerator SayWordCoroutine()
+    {
+        currentState.Value = RoundState.SayWord;
+        var randomizedClients = NetworkManager.Singleton.ConnectedClientsList.OrderBy(c => UnityEngine.Random.value).ToList();
+
+        foreach (var client in randomizedClients)
+        {
+            var player = client.PlayerObject.GetComponent<PlayerController>();
+
+            if (player != null)
+            {
+                UIManager.Instance.SetInfoTextClientRpc($"Player {client.ClientId}'s is speaking!");
+                UIManager.Instance.StartGameTimer(5f);
+                yield return new WaitForSeconds(5f);
+            }
+        }
+
+        UIManager.Instance.HideInfoTextClientRpc();
+    }
+
+    IEnumerator TalkingCoroutine()
+    {
+        currentState.Value = RoundState.Talking;
+        yield return new WaitForSeconds(30f);
+        StartCoroutine(VotingCoroutine());
+    }
+
+    IEnumerator VotingCoroutine()
+    {
+        currentState.Value = RoundState.Voting;
+        yield return new WaitForSeconds(30f);
     }
 
     void PickBlancoPlayer()
