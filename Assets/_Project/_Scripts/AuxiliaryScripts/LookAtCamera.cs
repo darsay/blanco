@@ -11,6 +11,8 @@ public class LookAtCamera : MonoBehaviour
 
     void Update()
     {
+        if (mainCamera == null) return;
+
         Vector3 targetPosition = mainCamera.position;
 
         targetPosition.y = transform.position.y;
