@@ -1,50 +1,37 @@
+using Unity.Cinemachine;
+using Unity.Netcode;
 using UnityEngine;
 
-public class PlayerController : MonoBehaviour
+public class PlayerController : NetworkBehaviour
 {
     [Header("References")]
-    public Transform cameraTransform;
-    public Transform torsoIkTarget;
-    public Transform handIkTarget;
+    public CinemachineCamera playerCamera;
 
-    [Header("Sensitivity")]
-    public float sensitivity = 100f;
+    [Header("Player Prefabs")]
+    public GameObject owningPlayer;
+    public GameObject nonOwningPlayer;
 
-    [Header("Rotation Limits")]
-    public float minVerticalAngle = -45f;
-    public float maxVerticalAngle = 45f;
-    public float minHorizontalAngle = -90f;
-    public float maxHorizontalAngle = 90f;
 
-    [Header("IK Target")]
-    public float ikTargetDistance = 2f;
-
-    private float verticalRotation = 0f;
-    private float horizontalRotation = 0f;
 
     void Start()
     {
-        Cursor.lockState = CursorLockMode.Locked;
+        //Cursor.lockState = CursorLockMode.Locked;
     }
 
-    void Update()
+    public override void OnNetworkSpawn()
     {
-        float mouseX = Input.GetAxis("Mouse X") * sensitivity * Time.deltaTime;
-        float mouseY = Input.GetAxis("Mouse Y") * sensitivity * Time.deltaTime;
-
-        horizontalRotation += mouseX;
-        verticalRotation -= mouseY;
-
-        horizontalRotation = Mathf.Clamp(horizontalRotation, minHorizontalAngle, maxHorizontalAngle);
-        verticalRotation = Mathf.Clamp(verticalRotation, minVerticalAngle, maxVerticalAngle);
-
-        cameraTransform.localRotation = Quaternion.Euler(verticalRotation, horizontalRotation, 0f);
-
-        // Posiciona el IK target frente a la cámara
-        if (torsoIkTarget != null)
+        if (IsOwner)
         {
-            torsoIkTarget.position = cameraTransform.position + cameraTransform.forward * ikTargetDistance;
-            handIkTarget.position = cameraTransform.position + cameraTransform.forward * 0.5f;
+            owningPlayer.SetActive(true);
+            nonOwningPlayer.SetActive(false);
+            playerCamera.enabled = true;
+        }
+        else
+        {
+            owningPlayer.SetActive(false);
+            nonOwningPlayer.SetActive(true);
+            playerCamera.enabled = false;
         }
     }
+
 }
