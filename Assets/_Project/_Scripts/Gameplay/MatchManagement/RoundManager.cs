@@ -72,10 +72,12 @@ public class RoundManager : NetworkBehaviour
                 UIManager.Instance.SetInfoTextClientRpc($"Player {client.ClientId}'s is speaking!");
                 UIManager.Instance.StartGameTimer(5f);
                 yield return new WaitForSeconds(5f);
+                UIManager.Instance.HideInfoTextClientRpc();
+                yield return new WaitForSeconds(1f);
             }
         }
 
-        UIManager.Instance.HideInfoTextClientRpc();
+        StartCoroutine(TalkingCoroutine());
     }
 
     IEnumerator TalkingCoroutine()
