@@ -1,37 +1,50 @@
-using Unity.Cinemachine;
-using Unity.Netcode;
 using UnityEngine;
 
-public class PlayerController : NetworkBehaviour
+public class PlayerController : MonoBehaviour
 {
     [Header("References")]
-    public CinemachineCamera playerCamera;
+    public Transform cameraTransform;
+    public Transform torsoIkTarget;
+    public Transform handIkTarget;
 
-    [Header("Player Prefabs")]
-    public GameObject owningPlayer;
-    public GameObject nonOwningPlayer;
+    [Header("Sensitivity")]
+    public float sensitivity = 100f;
 
+    [Header("Rotation Limits")]
+    public float minVerticalAngle = -45f;
+    public float maxVerticalAngle = 45f;
+    public float minHorizontalAngle = -90f;
+    public float maxHorizontalAngle = 90f;
 
+    [Header("IK Target")]
+    public float ikTargetDistance = 2f;
+
+    private float verticalRotation = 0f;
+    private float horizontalRotation = 0f;
 
     void Start()
     {
-        //Cursor.lockState = CursorLockMode.Locked;
+        Cursor.lockState = CursorLockMode.Locked;
     }
 
-    public override void OnNetworkSpawn()
+    void Update()
     {
-        if (IsOwner)
+        float mouseX = Input.GetAxis("Mouse X") * sensitivity * Time.deltaTime;
+        float mouseY = Input.GetAxis("Mouse Y") * sensitivity * Time.deltaTime;
+
+        horizontalRotation += mouseX;
+        verticalRotation -= mouseY;
+
+        horizontalRotation = Mathf.Clamp(horizontalRotation, minHorizontalAngle, maxHorizontalAngle);
+        verticalRotation = Mathf.Clamp(verticalRotation, minVerticalAngle, maxVerticalAngle);
+
+        cameraTransform.localRotation = Quaternion.Euler(verticalRotation, horizontalRotation, 0f);
+
+        // Posiciona el IK target frente a la cámara
+        if (torsoIkTarget != null)
         {
-            owningPlayer.SetActive(true);
-            nonOwningPlayer.SetActive(false);
-            playerCamera.enabled = true;
-        }
-        else
-        {
-            owningPlayer.SetActive(false);
-            nonOwningPlayer.SetActive(true);
-            playerCamera.enabled = false;
+            torsoIkTarget.position = cameraTransform.position + cameraTransform.forward * ikTargetDistance;
+            handIkTarget.position = cameraTransform.position + cameraTransform.forward * 0.5f;
         }
     }
-
 }
