@@ -18,6 +18,16 @@ namespace Blanco.UI
         [SerializeField] private Button leaveLobbyButton;
         [SerializeField] private TextMeshProUGUI leaveButtonText;
         
+        [Header("Players List")]
+        [SerializeField] private Transform playersListContainer;
+        [SerializeField] private GameObject playerItemPrefab;
+        [SerializeField] private TextMeshProUGUI playersListText;
+        
+        [Header("Player Name Edit")]
+        [SerializeField] private TMP_InputField playerNameInput;
+        [SerializeField] private Button updateNameButton;
+        [SerializeField] private TextMeshProUGUI currentPlayerNameText;
+        
         [Header("Settings")]
         [SerializeField] private float updateInterval = 1f;
         
@@ -101,6 +111,114 @@ namespace Blanco.UI
                 int maxPlayers = lobbyManager.GetMaxPlayers();
                 playerCountText.text = $"Jugadores: {currentPlayers}/{maxPlayers}";
             }
+            
+            // Actualizar lista de jugadores
+            UpdatePlayersList();
+        }
+        
+        private void UpdatePlayersList()
+        {
+            if (lobbyManager == null) return;
+            
+            // Limpiar lista actual
+            ClearPlayersList();
+            
+            // Obtener lista de jugadores
+            var players = lobbyManager.GetPlayers();
+            if (players == null || players.Count == 0)
+            {
+                if (playersListText != null)
+                {
+                    playersListText.text = "No hay jugadores conectados";
+                }
+                return;
+            }
+            
+            // Crear elementos para cada jugador
+            foreach (var player in players)
+            {
+                CreatePlayerItem(player);
+            }
+            
+            // Actualizar texto de resumen
+            if (playersListText != null)
+            {
+                playersListText.text = $"Jugadores ({players.Count}):";
+            }
+        }
+
+        private void ClearPlayersList()
+        {
+            if (playersListContainer != null)
+            {
+                foreach (Transform child in playersListContainer)
+                {
+                    if (child != null)
+                    {
+                        Destroy(child.gameObject);
+                    }
+                }
+            }
+        }
+        
+        private void CreatePlayerItem(Blanco.Networking.LobbyManager.PlayerInfo player)
+        {
+            if (playersListContainer == null) return;
+            
+            GameObject playerItem;
+            TextMeshProUGUI textComponent = null;
+            
+            // Usar prefab si está disponible, sino crear un texto simple
+            if (playerItemPrefab != null)
+            {
+                playerItem = Instantiate(playerItemPrefab, playersListContainer);
+                
+                // Configurar usando el componente PlayerListItem si está disponible
+                var playerListItem = playerItem.GetComponent<PlayerListItem>();
+                if (playerListItem != null)
+                {
+                    playerListItem.SetPlayerInfo(player);
+                    return; // Ya está configurado, salir
+                }
+                
+                // Si no hay PlayerListItem, obtener el TextMeshProUGUI del prefab
+                textComponent = playerItem.GetComponent<TextMeshProUGUI>();
+            }
+            else
+            {
+                // Crear un GameObject simple con texto
+                playerItem = new GameObject($"Player_{player.clientId}");
+                playerItem.transform.SetParent(playersListContainer);
+                
+                // Añadir componente de texto
+                textComponent = playerItem.AddComponent<TextMeshProUGUI>();
+                textComponent.fontSize = 14;
+                textComponent.color = Color.white;
+                
+                // Configurar layout
+                var layoutElement = playerItem.AddComponent<UnityEngine.UI.LayoutElement>();
+                layoutElement.minHeight = 20;
+            }
+            
+            // Configurar texto del jugador (fallback si no hay PlayerListItem)
+            if (textComponent != null)
+            {
+                string playerName = player.playerName.ToString();
+                string hostIndicator = player.isHost ? " (Host)" : "";
+                string status = player.isReady ? "✅" : "⏳";
+                
+                textComponent.text = $"{status} {playerName} (ID: {player.clientId}){hostIndicator}";
+                
+                // Color diferente para el host
+                if (player.isHost)
+                {
+                    textComponent.color = Color.yellow;
+                }
+                else
+                {
+                    textComponent.color = Color.white;
+                }
+            }
         }
         
         private void UpdateLeaveButtonText()
@@ -172,6 +290,11 @@ namespace Blanco.UI
         private void OnPlayersUpdated(List<Blanco.Networking.LobbyManager.PlayerInfo> players)
         {
             Debug.Log($"🔄 Lista de jugadores actualizada: {players.Count} jugadores");
+            
+            // Actualizar lista de jugadores específicamente
+            UpdatePlayersList();
+            
+            // También actualizar el resto de la UI
             UpdateUI();
         }
         

@@ -1,35 +1,55 @@
 using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
+using Unity.Netcode;
 
 namespace Blanco.UI
 {
     public class PlayerListItem : MonoBehaviour
     {
         [SerializeField] private TextMeshProUGUI playerNameText;
+        [SerializeField] private TextMeshProUGUI playerIdText;
         [SerializeField] private TextMeshProUGUI playerStatusText;
-        [SerializeField] private Image playerIcon;
-        [SerializeField] private Color hostColor = Color.yellow;
-        [SerializeField] private Color playerColor = Color.white;
         
         public void SetPlayerInfo(Blanco.Networking.LobbyManager.PlayerInfo playerInfo)
         {
             if (playerNameText != null)
             {
-                string playerName = playerInfo.playerName.ToString();
-                string hostText = playerInfo.isHost ? " (Host)" : "";
-                playerNameText.text = $"{playerName}{hostText}";
+                playerNameText.text = playerInfo.playerName.ToString();
+            }
+            
+            if (playerIdText != null)
+            {
+                playerIdText.text = $"ID: {playerInfo.clientId}";
             }
             
             if (playerStatusText != null)
             {
-                string status = playerInfo.isReady ? "Listo" : "No listo";
+                string status = playerInfo.isReady ? "✅ Listo" : "⏳ Esperando";
+                if (playerInfo.isHost)
+                {
+                    status += " (Host)";
+                }
                 playerStatusText.text = status;
             }
             
-            if (playerIcon != null)
+            // Color diferente para el host
+            if (playerInfo.isHost)
             {
-                playerIcon.color = playerInfo.isHost ? hostColor : playerColor;
+                if (playerNameText != null)
+                    playerNameText.color = Color.yellow;
+                if (playerIdText != null)
+                    playerIdText.color = Color.yellow;
+                if (playerStatusText != null)
+                    playerStatusText.color = Color.yellow;
+            }
+            else
+            {
+                if (playerNameText != null)
+                    playerNameText.color = Color.white;
+                if (playerIdText != null)
+                    playerIdText.color = Color.white;
+                if (playerStatusText != null)
+                    playerStatusText.color = Color.white;
             }
         }
     }

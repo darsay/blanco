@@ -11,9 +11,6 @@ GameObject:
   - component: {fileID: 8997424871019154719}
   - component: {fileID: 2368588651918556529}
   - component: {fileID: 8564197107332316245}
-  - component: {fileID: 3974324231152274100}
-  - component: {fileID: 8353569084777170478}
-  - component: {fileID: 6516479837674788017}
   m_Layer: 0
   m_Name: PlayerPrefab
   m_TagString: Untagged
@@ -48,7 +45,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 2226208970
+  GlobalObjectIdHash: 2568628796
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -86,52 +83,3 @@ CharacterController:
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &3974324231152274100
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2150997864624563587}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 25f030fed3ea7d949b55715eef13de07, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ShowTopMostFoldoutHeaderGroup: 1
-  playerName: Jugador
-  playerColor: {r: 1, g: 1, b: 1, a: 1}
-  playerNameText: {fileID: 0}
-  playerSprite: {fileID: 0}
---- !u!114 &8353569084777170478
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2150997864624563587}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e304c41918a141e4d93d599dcc252968, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ShowTopMostFoldoutHeaderGroup: 1
-  moveSpeed: 5
-  rotationSpeed: 10
-  characterController: {fileID: 0}
-  animator: {fileID: 0}
---- !u!114 &6516479837674788017
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2150997864624563587}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ac3e820bc49661e49bca6a09b32b381d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  playerModel: {fileID: 0}
-  playerUI: {fileID: 0}
-  setupOnStart: 1

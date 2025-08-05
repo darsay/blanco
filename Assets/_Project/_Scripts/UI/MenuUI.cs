@@ -18,6 +18,10 @@ namespace Blanco.UI
         [SerializeField] private Button createLobbyButton;
         [SerializeField] private Button joinLobbyButton;
         
+        [Header("Player Name")]
+        [SerializeField] private TMP_InputField playerNameInput;
+        [SerializeField] private TextMeshProUGUI currentPlayerNameText;
+        
         [Header("Create Lobby Panel (No usado)")]
         [SerializeField] private Button startButton;
         [SerializeField] private Button backFromCreateButton;
@@ -92,6 +96,48 @@ namespace Blanco.UI
             if (!string.IsNullOrEmpty(savedLobbyCode) && codeInput != null)
             {
                 codeInput.text = savedLobbyCode;
+            }
+            
+            // Cargar nombre del jugador guardado
+            LoadPlayerName();
+        }
+        
+        private void LoadPlayerName()
+        {
+            string savedName = PlayerPrefs.GetString("PlayerName", "");
+            if (currentPlayerNameText != null)
+            {
+                if (!string.IsNullOrEmpty(savedName))
+                {
+                    currentPlayerNameText.text = $"Jugador: {savedName}";
+                }
+                else
+                {
+                    currentPlayerNameText.text = "Jugador: Sin nombre";
+                }
+            }
+            
+            // Configurar input field
+            if (playerNameInput != null)
+            {
+                playerNameInput.text = savedName;
+                playerNameInput.onEndEdit.AddListener(OnPlayerNameChanged);
+            }
+        }
+        
+        private void OnPlayerNameChanged(string newName)
+        {
+            if (!string.IsNullOrEmpty(newName))
+            {
+                PlayerPrefs.SetString("PlayerName", newName);
+                PlayerPrefs.Save();
+                
+                if (currentPlayerNameText != null)
+                {
+                    currentPlayerNameText.text = $"Jugador: {newName}";
+                }
+                
+                Debug.Log($"✅ Nombre guardado: {newName}");
             }
         }
         
@@ -311,10 +357,16 @@ namespace Blanco.UI
         {
             PlayerPrefs.DeleteKey("LobbyCode");
             PlayerPrefs.DeleteKey("LobbyId");
+            PlayerPrefs.DeleteKey("PlayerName");
             PlayerPrefs.Save();
             
             if (codeInput != null)
                 codeInput.text = "";
+            
+            if (playerNameInput != null)
+                playerNameInput.text = "";
+            
+            LoadPlayerName();
             
             Debug.Log("✅ PlayerPrefs limpiados");
         }

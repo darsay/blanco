@@ -409,6 +409,13 @@ namespace Blanco.Networking
         {
             try
             {
+                // Obtener el nombre del jugador guardado
+                string playerName = PlayerPrefs.GetString("PlayerName", "");
+                if (string.IsNullOrEmpty(playerName))
+                {
+                    playerName = $"Player_{AuthenticationService.Instance.PlayerId}";
+                }
+                
                 CreateLobbyOptions lobbyOptions = new CreateLobbyOptions
                 {
                     IsPrivate = false,
@@ -421,7 +428,8 @@ namespace Blanco.Networking
                     {
                         Data = new Dictionary<string, PlayerDataObject>
                         {
-                            { "IsHost", new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public, "true") }
+                            { "IsHost", new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public, "true") },
+                            { "PlayerName", new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public, playerName) }
                         }
                     }
                 };
@@ -527,8 +535,27 @@ namespace Blanco.Networking
                     }
                 }
                 
+                // Obtener el nombre del jugador guardado
+                string playerName = PlayerPrefs.GetString("PlayerName", "");
+                if (string.IsNullOrEmpty(playerName))
+                {
+                    playerName = $"Player_{AuthenticationService.Instance.PlayerId}";
+                }
+                
+                // Configurar opciones de unión con el nombre del jugador
+                JoinLobbyByCodeOptions options = new JoinLobbyByCodeOptions
+                {
+                    Player = new Player
+                    {
+                        Data = new Dictionary<string, PlayerDataObject>
+                        {
+                            { "PlayerName", new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public, playerName) }
+                        }
+                    }
+                };
+                
                 // Unirse al nuevo lobby
-                var lobby = await LobbyService.Instance.JoinLobbyByCodeAsync(joinCode);
+                var lobby = await LobbyService.Instance.JoinLobbyByCodeAsync(joinCode, options);
                 
                 if (showDebugLogs)
                     Debug.Log($"✅ Lobby encontrado: {lobby.Name} (ID: {lobby.Id})");
@@ -577,15 +604,35 @@ namespace Blanco.Networking
         private async void OnClientConnected(ulong clientId)
         {
             if (showDebugLogs)
-                Debug.Log($"🟢 Cliente conectado: {clientId}");
+                Debug.Log($"🔗 Cliente conectado: {clientId}");
             
-            // Agregar jugador a la lista si es servidor
-            if (NetworkManager.Singleton.IsServer)
+            // Obtener el nombre del jugador desde Unity Services
+            string playerName = null;
+            if (CurrentLobby != null)
             {
-                AddPlayer(clientId, $"Player_{clientId}", clientId == NetworkManager.Singleton.LocalClientId);
+                foreach (var player in CurrentLobby.Players)
+                {
+                    if (player.Id == AuthenticationService.Instance.PlayerId && player.Data != null)
+                    {
+                        if (player.Data.ContainsKey("PlayerName"))
+                        {
+                            playerName = player.Data["PlayerName"].Value;
+                            break;
+                        }
+                    }
+                }
             }
             
-            // Unirse al canal de voz SOLO si es el jugador local
+            // Si no se encontró en Unity Services, usar PlayerPrefs como fallback
+            if (string.IsNullOrEmpty(playerName))
+            {
+                playerName = PlayerPrefs.GetString("PlayerName", "");
+            }
+            
+            // Añadir jugador con el nombre obtenido
+            AddPlayer(clientId, playerName, clientId == NetworkManager.Singleton.LocalClientId);
+            
+            // Unirse al canal de voz solo si es el cliente local
             if (clientId == NetworkManager.Singleton.LocalClientId)
             {
                 await JoinLobbyVoiceChannel();
@@ -752,6 +799,20 @@ namespace Blanco.Networking
         {
             if (!NetworkManager.Singleton.IsServer) return;
             
+            // Si no se proporciona un nombre, usar el guardado en PlayerPrefs como fallback
+            if (string.IsNullOrEmpty(playerName))
+            {
+                string savedPlayerName = PlayerPrefs.GetString("PlayerName", "");
+                if (!string.IsNullOrEmpty(savedPlayerName))
+                {
+                    playerName = savedPlayerName;
+                }
+                else
+                {
+                    playerName = $"Player_{clientId}";
+                }
+            }
+            
             var playerInfo = new PlayerInfo
             {
                 clientId = clientId,
@@ -787,6 +848,60 @@ namespace Blanco.Networking
                     NotifyPlayersUpdated();
                     break;
                 }
+            }
+        }
+        
+        public void UpdatePlayerName(string newName)
+        {
+            if (string.IsNullOrEmpty(newName)) return;
+            
+            // Actualizar el nombre en la lista de jugadores local
+            ulong localClientId = NetworkManager.Singleton.LocalClientId;
+            
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (players[i].clientId == localClientId)
+                {
+                    var updatedPlayer = players[i];
+                    updatedPlayer.playerName = new FixedString32Bytes(newName);
+                    players[i] = updatedPlayer;
+                    
+                    if (showDebugLogs)
+                        Debug.Log($"✅ Nombre actualizado localmente: {newName}");
+                    
+                    // Notificar cambio
+                    NotifyPlayersUpdated();
+                    break;
+                }
+            }
+            
+            // También actualizar en Unity Services si estamos en un lobby
+            if (CurrentLobby != null)
+            {
+                _ = UpdatePlayerNameInUnityServices(newName);
+            }
+        }
+        
+        private async Task UpdatePlayerNameInUnityServices(string newName)
+        {
+            try
+            {
+                var updatePlayerOptions = new UpdatePlayerOptions
+                {
+                    Data = new Dictionary<string, PlayerDataObject>
+                    {
+                        { "PlayerName", new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public, newName) }
+                    }
+                };
+                
+                await LobbyService.Instance.UpdatePlayerAsync(CurrentLobby.Id, AuthenticationService.Instance.PlayerId, updatePlayerOptions);
+                
+                if (showDebugLogs)
+                    Debug.Log($"✅ Nombre actualizado en Unity Services: {newName}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"❌ Error al actualizar nombre en Unity Services: {e.Message}");
             }
         }
         
@@ -972,46 +1087,5 @@ namespace Blanco.Networking
         }
         
         #endregion
-        
-        #region Game Methods
-        
-        [ServerRpc(RequireOwnership = false)]
-        public void StartGameServerRpc()
-        {
-            if (!NetworkManager.Singleton.IsServer) return;
-            
-            Debug.Log("🎮 Iniciando juego...");
-            lobbyState.Value = LobbyState.Starting;
-            OnGameStarting?.Invoke();
-        }
-        
-        [ClientRpc]
-        private void StartGameClientRpc()
-        {
-            Debug.Log("🎮 Juego iniciado");
-        }
-        
-        public void StartGame()
-        {
-            if (NetworkManager.Singleton.IsServer)
-            {
-                StartGameServerRpc();
-            }
-        }
-        
-        #endregion
-        
-        [ContextMenu("Debug Lobby Info")]
-        public void DebugLobbyInfo()
-        {
-            string info = "🎮 === LOBBY INFO ===\n";
-            info += $"Estado: {lobbyState.Value}\n";
-            info += $"Jugadores: {players.Count}/{maxPlayers}\n";
-            info += $"Es Host: {IsHostPlayer()}\n";
-            info += $"Vivox Logueado: {VivoxService.Instance.IsLoggedIn}\n";
-            info += $"Canales Activos: {VivoxService.Instance.ActiveChannels.Count}\n";
-            info += "🎮 === FIN INFO ===";
-            Debug.Log(info);
-        }
     }
 } 
