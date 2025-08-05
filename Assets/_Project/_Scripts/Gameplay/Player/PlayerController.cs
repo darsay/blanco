@@ -30,7 +30,7 @@ public class PlayerController : NetworkBehaviour
 
     void Start()
     {
-        //Cursor.lockState = CursorLockMode.Locked;
+        Cursor.lockState = CursorLockMode.Locked;
     }
 
     public override void OnNetworkSpawn()
@@ -64,7 +64,6 @@ public class PlayerController : NetworkBehaviour
         }
         else
         {
-            Debug.Log($"Setting card word for player {OwnerClientId} to {word}. Blanco {blancoId}");
             Card.SetWord(word.ToString());
         }
     }
@@ -82,4 +81,24 @@ public class PlayerController : NetworkBehaviour
             localPlayerController.SeeCard(show);
         }
     }
+
+    [ClientRpc]
+    public void PointClientRpc(bool active)
+    {
+        if (IsOwner)
+        {
+            localPlayerController.Point(active);
+        }
+    }
+
+    [ClientRpc]
+    public void AimClientRpc(bool active)
+    {
+        if (IsOwner)
+        {
+            localPlayerController.Aim(active);
+        }
+    }
+
+
 }

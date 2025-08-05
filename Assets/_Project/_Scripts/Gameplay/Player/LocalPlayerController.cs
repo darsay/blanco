@@ -13,6 +13,7 @@ public class LocalPlayerController : NetworkBehaviour
     public CinemachineCamera playerCamera;
     public Rig RightHandRig;
     public Rig LeftHandRig;
+    public GameObject revolver;
 
     [Header("Sensitivity")]
     public float sensitivity = 100f;
@@ -66,15 +67,16 @@ public class LocalPlayerController : NetworkBehaviour
 
     void HandlePointing()
     {
+        if (RoundManager.Instance.currentState.Value == RoundManager.RoundState.Voting)
+            return;
+
         if (Input.GetMouseButtonDown(1))
         {
-            playerActionsSync.isPlayerPointing.Value = true;
-            DOTween.To(() => RightHandRig.weight, x => RightHandRig.weight = x, 1f, 0.3f);
+            Point(true);
         }
         else if(Input.GetMouseButtonUp(1))
         {
-            playerActionsSync.isPlayerPointing.Value = false;
-            DOTween.To(() => RightHandRig.weight, x => RightHandRig.weight = x, 0f, 0.3f);
+            Point(false);
         }
     }
 
@@ -99,5 +101,24 @@ public class LocalPlayerController : NetworkBehaviour
 
         playerActionsSync.isPlayerCheckingCard.Value = show;
         DOTween.To(() => LeftHandRig.weight, x => LeftHandRig.weight = x, targetValue, 0.3f);
+    }
+
+    public void Point(bool active)
+    {
+        var targetValue = active ? 1f : 0f;
+
+        playerActionsSync.isPlayerPointing.Value = active;
+        DOTween.To(() => RightHandRig.weight, x => RightHandRig.weight = x, targetValue, 0.3f);
+    }
+
+    public void Aim(bool active)
+    {
+        revolver.SetActive(active);
+
+        var targetValue = active ? 1f : 0f;
+
+        playerActionsSync.isPlayerAiming.Value = active;
+        revolver.SetActive(active);
+        DOTween.To(() => RightHandRig.weight, x => RightHandRig.weight = x, targetValue, 0.3f);
     }
 }

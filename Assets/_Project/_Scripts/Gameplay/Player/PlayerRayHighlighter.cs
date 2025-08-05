@@ -7,11 +7,6 @@ public class PlayerRayHighlighter : MonoBehaviour
 
     private PlayerCollider lastTarget;
 
-    private void Reset()
-    {
-        cam = Camera.main;
-    }
-
     void Update()
     {
         if (cam == null) return;

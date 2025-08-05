@@ -83,14 +83,35 @@ public class RoundManager : NetworkBehaviour
     IEnumerator TalkingCoroutine()
     {
         currentState.Value = RoundState.Talking;
-        yield return new WaitForSeconds(30f);
+        UIManager.Instance.StartGameTimer(10f);
+        yield return new WaitForSeconds(10f);
+
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            var player = client.PlayerObject.GetComponent<PlayerController>();
+            if (player != null)
+            {
+                player.ShowCardClientRpc(false);
+                player.PointClientRpc(false);
+            }
+        }
+
         StartCoroutine(VotingCoroutine());
     }
 
     IEnumerator VotingCoroutine()
     {
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            var player = client.PlayerObject.GetComponent<PlayerController>();
+            if (player != null)
+            {
+                player.AimClientRpc(true);
+            }
+        }
         currentState.Value = RoundState.Voting;
         yield return new WaitForSeconds(30f);
+        UIManager.Instance.StartGameTimer(30f);
     }
 
     void PickBlancoPlayer()
