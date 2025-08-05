@@ -210,7 +210,7 @@ namespace Blanco.UI
                 if (success)
                 {
                     // Cambiar a escena de lobby directamente
-                    UnityEngine.SceneManagement.SceneManager.LoadScene("Lobby");
+                    UnityEngine.SceneManagement.SceneManager.LoadScene("GameplayTest");
                 }
                 else
                 {
@@ -328,7 +328,7 @@ namespace Blanco.UI
                 if (success)
                 {
                     // Cambiar a escena de lobby (se sincronizará con el host)
-                    UnityEngine.SceneManagement.SceneManager.LoadScene("Lobby");
+                    UnityEngine.SceneManagement.SceneManager.LoadScene("GameplayTest");
                 }
                 else
                 {
