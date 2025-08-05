@@ -317,9 +317,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5557906566094156606}
+  - component: {fileID: 4849380654776781964}
+  - component: {fileID: 8951707241792049703}
   m_Layer: 0
   m_Name: LowerLeg_R
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -340,6 +342,43 @@ Transform:
   - {fileID: 4549693458160620865}
   m_Father: {fileID: 283662884468319301}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &4849380654776781964
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 225712880251354558}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 10.788694
+  m_Height: 43.154778
+  m_Direction: 0
+  m_Center: {x: -21.577389, y: 0, z: 0}
+--- !u!114 &8951707241792049703
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 225712880251354558}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &265202325045915807
 GameObject:
   m_ObjectHideFlags: 0
@@ -458,7 +497,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8291630546875577161}
   - component: {fileID: 2864930383015241627}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Captain_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -595,7 +634,7 @@ GameObject:
   m_Component:
   - component: {fileID: 137765552615670969}
   - component: {fileID: 4166951700285167437}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Mexican_Female_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -829,7 +868,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2033502450600002839}
   - component: {fileID: 8580601238591628459}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_NativeAmericanWarrior_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1094,7 +1133,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1867426738345505683}
   - component: {fileID: 1548745636341377383}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_NativeAmericanWarrior_Male_02
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1318,9 +1357,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1059637320324125438}
+  - component: {fileID: 7732061482530780130}
+  - component: {fileID: 2763584589136247806}
   m_Layer: 0
   m_Name: Hips
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1343,6 +1384,41 @@ Transform:
   - {fileID: 283662884468319301}
   m_Father: {fileID: 1415269815995194908}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &7732061482530780130
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1169755428898188152}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 32.29951, y: 27.83693, z: 38.197823}
+  m_Center: {x: -12.033976, y: 0.100777626, z: 0.00001335144}
+--- !u!114 &2763584589136247806
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1169755428898188152}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &1236332252020386224
 GameObject:
   m_ObjectHideFlags: 0
@@ -1703,9 +1779,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6568137740170331866}
+  - component: {fileID: 7776648741913403648}
+  - component: {fileID: 6832945272434689627}
   m_Layer: 0
   m_Name: UpperLeg_L
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1726,6 +1804,43 @@ Transform:
   - {fileID: 4259968301573780854}
   m_Father: {fileID: 1059637320324125438}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &7776648741913403648
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1594265095910629703}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 11.979279
+  m_Height: 39.930927
+  m_Direction: 0
+  m_Center: {x: 19.965464, y: 0, z: 0}
+--- !u!114 &6832945272434689627
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1594265095910629703}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &1676847360811665498
 GameObject:
   m_ObjectHideFlags: 0
@@ -1736,7 +1851,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4025695220801452212}
   - component: {fileID: 6088063291954761283}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_NativeAmericanWarrior_Male_03
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1936,7 +2051,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4340809782749803443}
   - component: {fileID: 86501424519091874}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_NativeAmericanWarrior_Female_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2105,7 +2220,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1221625679300161374}
   - component: {fileID: 1045468641959390004}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Priest_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2280,7 +2395,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &6560591168919687134
 Transform:
   m_ObjectHideFlags: 0
@@ -2511,143 +2626,6 @@ MonoBehaviour:
     m_HintWeight: 1
     m_MaintainTargetPositionOffset: 0
     m_MaintainTargetRotationOffset: 0
---- !u!1 &2042002565723731325
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 4239710897534497975}
-  - component: {fileID: 301368672745336083}
-  m_Layer: 0
-  m_Name: Character_Bandit_Male_01 (1)
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!4 &4239710897534497975
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2042002565723731325}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0, y: 0, z: 0}
-  m_LocalScale: {x: 0.01, y: 0.01, z: 0.01}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 7312562389936650806}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!137 &301368672745336083
-SkinnedMeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2042002565723731325}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 3
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: da23a6c2a7ba3e94d978f731b0da222b, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  serializedVersion: 2
-  m_Quality: 0
-  m_UpdateWhenOffscreen: 0
-  m_SkinnedMotionVectors: 1
-  m_Mesh: {fileID: 4300034, guid: 72b83be23d80d604bbe50cdfeebcf552, type: 3}
-  m_Bones:
-  - {fileID: 1415269815995194908}
-  - {fileID: 1059637320324125438}
-  - {fileID: 2324952736597983142}
-  - {fileID: 3039946430117971524}
-  - {fileID: 808635625935977172}
-  - {fileID: 7433581093747698276}
-  - {fileID: 3641473857760179729}
-  - {fileID: 7379797565168678919}
-  - {fileID: 6166942678244937516}
-  - {fileID: 127425792763812579}
-  - {fileID: 5095348209876182468}
-  - {fileID: 277242232325855853}
-  - {fileID: 372693123244746513}
-  - {fileID: 7970496439055620146}
-  - {fileID: 3401527373963040323}
-  - {fileID: 2951917606788840895}
-  - {fileID: 148092254219840651}
-  - {fileID: 2840680202323970309}
-  - {fileID: 3057147038849435169}
-  - {fileID: 4416537429279071202}
-  - {fileID: 9055993630458915314}
-  - {fileID: 2780470331208065425}
-  - {fileID: 4818082572246553265}
-  - {fileID: 9158936261895574857}
-  - {fileID: 4626359270937747394}
-  - {fileID: 6491891908846873476}
-  - {fileID: 1746962040509103344}
-  - {fileID: 2474235911732227509}
-  - {fileID: 739572863248115797}
-  - {fileID: 9057988359090917640}
-  - {fileID: 1211209502972850976}
-  - {fileID: 3772296713210221030}
-  - {fileID: 7340908233621967774}
-  - {fileID: 8745387769099414657}
-  - {fileID: 2842621533595313714}
-  - {fileID: 4921569393383771568}
-  - {fileID: 1012867056448475076}
-  - {fileID: 9174118564085728443}
-  - {fileID: 3354942386296389477}
-  - {fileID: 283662884468319301}
-  - {fileID: 5557906566094156606}
-  - {fileID: 4549693458160620865}
-  - {fileID: 2277199361169890671}
-  - {fileID: 2086196349532529170}
-  - {fileID: 6568137740170331866}
-  - {fileID: 4259968301573780854}
-  - {fileID: 4300298207125088617}
-  - {fileID: 8644925706233554519}
-  - {fileID: 3752479353772500956}
-  m_BlendShapeWeights: []
-  m_RootBone: {fileID: 1415269815995194908}
-  m_AABB:
-    m_Center: {x: 0.0000038146973, y: 86.908516, z: -4.7944508}
-    m_Extent: {x: 102.582306, y: 99.46456, z: 30.393751}
-  m_DirtyAABB: 0
 --- !u!1 &2055277838191554356
 GameObject:
   m_ObjectHideFlags: 0
@@ -3057,9 +3035,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3641473857760179729}
+  - component: {fileID: 3689292876542487349}
+  - component: {fileID: 16198974722120478}
   m_Layer: 0
   m_Name: Head
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -3081,6 +3061,41 @@ Transform:
   - {fileID: 7379797565168678919}
   m_Father: {fileID: 7433581093747698276}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!135 &3689292876542487349
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2160012890601988593}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 20.43
+  m_Center: {x: 0, y: 11.1, z: 0}
+--- !u!114 &16198974722120478
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2160012890601988593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &2213698707778919394
 GameObject:
   m_ObjectHideFlags: 0
@@ -3090,9 +3105,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1746962040509103344}
+  - component: {fileID: 6871623940461449432}
+  - component: {fileID: 8949373853924578585}
   m_Layer: 0
   m_Name: Elbow_R
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -3113,6 +3130,43 @@ Transform:
   - {fileID: 2474235911732227509}
   m_Father: {fileID: 6491891908846873476}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &6871623940461449432
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2213698707778919394}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 9.811636
+  m_Height: 49.058178
+  m_Direction: 0
+  m_Center: {x: 24.529089, y: 0, z: 0}
+--- !u!114 &8949373853924578585
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2213698707778919394}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &2240256837934228587
 GameObject:
   m_ObjectHideFlags: 0
@@ -3668,7 +3722,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6823013275846690121}
   - component: {fileID: 4847172672651073468}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_NativeAmericanElder_Female_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4271,7 +4325,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1762387152707653316}
   - component: {fileID: 7723322358369339036}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Thug_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5280,7 +5334,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8468745080347594240}
   - component: {fileID: 8550408703613734869}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_NativeAmerican_Female_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5585,7 +5639,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6674094082472234644}
   - component: {fileID: 5536825772865345422}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Mexican_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5878,9 +5932,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6491891908846873476}
+  - component: {fileID: 8043388106587951816}
+  - component: {fileID: 6412462618384914793}
   m_Layer: 0
   m_Name: Shoulder_R
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -5901,6 +5957,43 @@ Transform:
   - {fileID: 1746962040509103344}
   m_Father: {fileID: 4626359270937747394}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &8043388106587951816
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4224908645169315549}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 8.486866
+  m_Height: 33.947464
+  m_Direction: 0
+  m_Center: {x: 16.973732, y: 0, z: 0}
+--- !u!114 &6412462618384914793
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4224908645169315549}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &4229617572790469405
 GameObject:
   m_ObjectHideFlags: 0
@@ -5911,7 +6004,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6791676892420730524}
   - component: {fileID: 8619212190037149652}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_NativeAmericanChief_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6430,7 +6523,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &7312562389936650806
 Transform:
   m_ObjectHideFlags: 0
@@ -6445,7 +6538,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3709254909677765744}
-  - {fileID: 4239710897534497975}
   - {fileID: 8291630546875577161}
   - {fileID: 2706335893311195442}
   - {fileID: 8281059174470884156}
@@ -6531,7 +6623,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6407924199865282634}
   - component: {fileID: 8001214665986096619}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Hunter_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7076,7 +7168,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6857228046712596279}
   - component: {fileID: 1926080438514770647}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Soldier_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7523,7 +7615,7 @@ GameObject:
   m_Component:
   - component: {fileID: 939206499343384593}
   - component: {fileID: 7791595750660699619}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Traveller_Female_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7691,9 +7783,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4259968301573780854}
+  - component: {fileID: 3888048524658698950}
+  - component: {fileID: 1852464452790583257}
   m_Layer: 0
   m_Name: LowerLeg_L
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -7714,6 +7808,43 @@ Transform:
   - {fileID: 4300298207125088617}
   m_Father: {fileID: 6568137740170331866}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &3888048524658698950
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5763348665257530162}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 10.78868
+  m_Height: 43.15472
+  m_Direction: 0
+  m_Center: {x: 21.57736, y: 0, z: 0}
+--- !u!114 &1852464452790583257
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5763348665257530162}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &5831358335983683691
 GameObject:
   m_ObjectHideFlags: 0
@@ -7954,9 +8085,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3039946430117971524}
+  - component: {fileID: 2693645193997632101}
+  - component: {fileID: 5605380979118028364}
   m_Layer: 0
   m_Name: Spine_02
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -7979,6 +8112,41 @@ Transform:
   - {fileID: 8786661273833802428}
   m_Father: {fileID: 2324952736597983142}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &2693645193997632101
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6133579221671156672}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 23.371832, y: 27.84618, z: 38.197823}
+  m_Center: {x: -11.685908, y: -3.0918922, z: 0.00001335144}
+--- !u!114 &5605380979118028364
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6133579221671156672}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &6188986366935466453
 GameObject:
   m_ObjectHideFlags: 0
@@ -8047,6 +8215,7 @@ Transform:
   - {fileID: 4845383633639594571}
   - {fileID: 646920161736771676}
   - {fileID: 6504479955033473721}
+  - {fileID: 4446182546286034269}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &7796756154930052109
@@ -8104,9 +8273,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5095348209876182468}
+  - component: {fileID: 2385548259847456767}
+  - component: {fileID: 4354489146434647798}
   m_Layer: 0
   m_Name: Shoulder_L
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -8127,6 +8298,43 @@ Transform:
   - {fileID: 277242232325855853}
   m_Father: {fileID: 127425792763812579}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &2385548259847456767
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6263763160637779300}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 8.48685
+  m_Height: 33.9474
+  m_Direction: 0
+  m_Center: {x: -16.9737, y: 0, z: 0}
+--- !u!114 &4354489146434647798
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6263763160637779300}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &6274677820824633429
 GameObject:
   m_ObjectHideFlags: 0
@@ -8420,7 +8628,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8974974694612290134}
   - component: {fileID: 4612123347692928904}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Mexican_Male_02
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9091,6 +9299,52 @@ Transform:
   m_Children: []
   m_Father: {fileID: 3909541836076474058}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &7010666354108965888
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4446182546286034269}
+  - component: {fileID: 4289734565643469577}
+  m_Layer: 0
+  m_Name: PlayerRayHighlighter
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4446182546286034269
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7010666354108965888}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.0851, y: 1.45311, z: 1.30154}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3456208421734235836}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4289734565643469577
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7010666354108965888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 765904c4a913e8241a21ab5d8697d271, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxDistance: 100
+  cam: {fileID: 422543480686528771}
 --- !u!1 &7027781312276690450
 GameObject:
   m_ObjectHideFlags: 0
@@ -9260,7 +9514,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4267102738108924428}
   - component: {fileID: 3229889296395373797}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Salesman_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9396,9 +9650,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 277242232325855853}
+  - component: {fileID: 7987014419431023619}
+  - component: {fileID: 2364549729999384307}
   m_Layer: 0
   m_Name: Elbow_L
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -9419,6 +9675,43 @@ Transform:
   - {fileID: 372693123244746513}
   m_Father: {fileID: 5095348209876182468}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &7987014419431023619
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7214066924808505167}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 9.811709
+  m_Height: 49.058548
+  m_Direction: 0
+  m_Center: {x: -24.529274, y: 0, z: 0}
+--- !u!114 &2364549729999384307
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7214066924808505167}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &7233914664898359665
 GameObject:
   m_ObjectHideFlags: 0
@@ -9429,7 +9722,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2706335893311195442}
   - component: {fileID: 4552071823587377497}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_GoldMiner_Male_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9966,7 +10259,7 @@ GameObject:
   m_Component:
   - component: {fileID: 490527274818592406}
   - component: {fileID: 8948689947084098263}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_Thug_Male_02
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10495,7 +10788,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8281059174470884156}
   - component: {fileID: 5160845097382662766}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Character_GoldMiner_Male_02
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11170,9 +11463,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 283662884468319301}
+  - component: {fileID: 76462354315861775}
+  - component: {fileID: 2807039408783017123}
   m_Layer: 0
   m_Name: UpperLeg_R
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -11193,6 +11488,43 @@ Transform:
   - {fileID: 5557906566094156606}
   m_Father: {fileID: 1059637320324125438}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &76462354315861775
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9155975339928971174}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 11.979277
+  m_Height: 39.93092
+  m_Direction: 0
+  m_Center: {x: -19.96546, y: 0, z: 0}
+--- !u!114 &2807039408783017123
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9155975339928971174}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0dc653e735d4ea45a9dec47a604d44b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelToChange: {fileID: 1267497080305944663}
+  highlightLayer: Highlighted
 --- !u!1 &9179861594361187691
 GameObject:
   m_ObjectHideFlags: 0
@@ -11342,7 +11674,7 @@ GameObject:
   - component: {fileID: 945149707042103678}
   m_Layer: 0
   m_Name: Root
-  m_TagString: Untagged
+  m_TagString: PlayerModel
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -11573,7 +11905,9 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 181.048
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 8003490641498917333, guid: d1c7a0c33e74e754c960979e79559928, type: 3}
+    - {fileID: 6612380482531281610, guid: d1c7a0c33e74e754c960979e79559928, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
