@@ -14,6 +14,10 @@ namespace Blanco.UI
         [SerializeField] private Button copyCodeButton;
         [SerializeField] private TextMeshProUGUI playerCountText;
         
+        [Header("Leave Lobby")]
+        [SerializeField] private Button leaveLobbyButton;
+        [SerializeField] private TextMeshProUGUI leaveButtonText;
+        
         [Header("Settings")]
         [SerializeField] private float updateInterval = 1f;
         
@@ -43,6 +47,9 @@ namespace Blanco.UI
             // Configurar botones
             if (copyCodeButton != null)
                 copyCodeButton.onClick.AddListener(OnCopyCodeClicked);
+            
+            if (leaveLobbyButton != null)
+                leaveLobbyButton.onClick.AddListener(OnLeaveLobbyClicked);
             
             // Mostrar código del lobby
             UpdateLobbyCode();
@@ -77,6 +84,9 @@ namespace Blanco.UI
             
             // Actualizar información del lobby
             UpdateLobbyInfo();
+            
+            // Actualizar texto del botón de salir
+            UpdateLeaveButtonText();
         }
         
         private void UpdateLobbyInfo()
@@ -90,6 +100,15 @@ namespace Blanco.UI
                 int currentPlayers = lobbyManager.GetPlayerCount();
                 int maxPlayers = lobbyManager.GetMaxPlayers();
                 playerCountText.text = $"Jugadores: {currentPlayers}/{maxPlayers}";
+            }
+        }
+        
+        private void UpdateLeaveButtonText()
+        {
+            if (leaveButtonText != null)
+            {
+                bool isHost = NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost;
+                leaveButtonText.text = isHost ? "Cerrar Lobby" : "Abandonar Lobby";
             }
         }
         
@@ -119,26 +138,31 @@ namespace Blanco.UI
             }
         }
         
-        // Métodos para iniciar juego y salir del lobby (puedes agregarlos después)
-        private void OnStartGameClicked()
-        {
-            Debug.Log("🎮 Iniciando juego...");
-            
-            if (lobbyManager != null)
-            {
-                lobbyManager.StartGame();
-            }
-        }
-        
         private void OnLeaveLobbyClicked()
         {
-            Debug.Log("🚪 Abandonando lobby...");
+            bool isHost = NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost;
             
-            // Abandonar lobby
-            if (lobbyManager != null)
+            if (isHost)
             {
-                lobbyManager.LeaveLobby();
+                Debug.Log("🚪 Host cerrando lobby...");
+                // El host cierra el lobby para todos
+                if (lobbyManager != null)
+                {
+                    lobbyManager.CloseLobby();
+                }
             }
+            else
+            {
+                Debug.Log("🚪 Cliente abandonando lobby...");
+                // El cliente solo se va
+                if (lobbyManager != null)
+                {
+                    lobbyManager.LeaveLobby();
+                }
+            }
+            
+            // Limpiar datos del lobby
+            PlayerPrefs.DeleteKey("LobbyCode");
             
             // Volver al menú principal
             UnityEngine.SceneManagement.SceneManager.LoadScene("Menu");

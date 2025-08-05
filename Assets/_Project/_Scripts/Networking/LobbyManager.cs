@@ -28,7 +28,12 @@ namespace Blanco.Networking
         
         public static Lobby CurrentLobby;
         private static UnityTransport _transport;
-
+        
+        // Sistema de heartbeat para detectar desconexiones
+        private float lastHeartbeatTime = 0f;
+        private float heartbeatInterval = 5f; // Verificar cada 5 segundos
+        private float hostTimeout = 10f; // Host ausente por más de 10 segundos = desconectado
+        
         // NetworkVariables para sincronizar datos del lobby
         private NetworkVariable<LobbyState> lobbyState = new NetworkVariable<LobbyState>(LobbyState.Waiting);
         private NetworkList<PlayerInfo> players = new NetworkList<PlayerInfo>();
@@ -134,7 +139,164 @@ namespace Blanco.Networking
             if (NetworkManager.Singleton.IsServer)
             {
                 lobbyState.Value = LobbyState.Waiting;
+                
+                // Iniciar heartbeat del host
+                StartCoroutine(HostHeartbeat());
             }
+        }
+        
+        private System.Collections.IEnumerator HostHeartbeat()
+        {
+            while (CurrentLobby != null && NetworkManager.Singleton.IsServer)
+            {
+                try
+                {
+                    // Actualizar heartbeat del host
+                    var updateOptions = new UpdateLobbyOptions
+                    {
+                        Data = new Dictionary<string, DataObject>
+                        {
+                            { "LastHeartbeat", new DataObject(DataObject.VisibilityOptions.Public, DateTime.UtcNow.ToString()) }
+                        }
+                    };
+                    
+                    // Usar Task.Run para evitar await en corrutina
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await LobbyService.Instance.UpdateLobbyAsync(CurrentLobby.Id, updateOptions);
+                            
+                            if (showDebugLogs)
+                                Debug.Log("💓 Heartbeat del host actualizado");
+                        }
+                        catch (Exception e)
+                        {
+                            if (showDebugLogs)
+                                Debug.LogWarning($"⚠️ Error al actualizar heartbeat del host: {e.Message}");
+                        }
+                    });
+                }
+                catch (Exception e)
+                {
+                    if (showDebugLogs)
+                        Debug.LogWarning($"⚠️ Error al preparar heartbeat del host: {e.Message}");
+                }
+                
+                yield return new WaitForSeconds(heartbeatInterval);
+            }
+        }
+        
+        private void Update()
+        {
+            // Sistema de heartbeat para detectar desconexiones del host
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient && CurrentLobby != null)
+            {
+                CheckHostConnection();
+            }
+        }
+        
+        private async void CheckHostConnection()
+        {
+            if (Time.time - lastHeartbeatTime > heartbeatInterval)
+            {
+                lastHeartbeatTime = Time.time;
+                
+                try
+                {
+                    // Verificar si el lobby sigue activo
+                    var updatedLobby = await LobbyService.Instance.GetLobbyAsync(CurrentLobby.Id);
+                    
+                    if (updatedLobby == null)
+                    {
+                        if (showDebugLogs)
+                            Debug.Log("🚪 Lobby ya no existe - Host probablemente desconectado");
+                        
+                        HandleHostDisconnection();
+                        return;
+                    }
+                    
+                    // Verificar si el host sigue en el lobby
+                    bool hostFound = false;
+                    string lastHeartbeat = "";
+                    
+                    foreach (var player in updatedLobby.Players)
+                    {
+                        if (player.Data != null && player.Data.ContainsKey("IsHost"))
+                        {
+                            if (player.Data["IsHost"].Value == "true")
+                            {
+                                hostFound = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Verificar heartbeat del host
+                    if (updatedLobby.Data != null && updatedLobby.Data.ContainsKey("LastHeartbeat"))
+                    {
+                        lastHeartbeat = updatedLobby.Data["LastHeartbeat"].Value;
+                        
+                        if (DateTime.TryParse(lastHeartbeat, out DateTime heartbeatTime))
+                        {
+                            var timeSinceHeartbeat = DateTime.UtcNow - heartbeatTime;
+                            
+                            if (timeSinceHeartbeat.TotalSeconds > hostTimeout)
+                            {
+                                if (showDebugLogs)
+                                    Debug.Log($"🚪 Host inactivo por {timeSinceHeartbeat.TotalSeconds:F1} segundos - Desconectado");
+                                
+                                HandleHostDisconnection();
+                                return;
+                            }
+                        }
+                    }
+                    
+                    if (!hostFound)
+                    {
+                        if (showDebugLogs)
+                            Debug.Log("🚪 Host no encontrado en el lobby - Desconectado");
+                        
+                        HandleHostDisconnection();
+                    }
+                    else if (showDebugLogs)
+                    {
+                        Debug.Log($"💓 Host activo - Último heartbeat: {lastHeartbeat}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    if (showDebugLogs)
+                        Debug.LogWarning($"⚠️ Error al verificar estado del lobby: {e.Message}");
+                    
+                    // Si no podemos contactar el lobby, asumir que el host se desconectó
+                    HandleHostDisconnection();
+                }
+            }
+        }
+        
+        private void HandleHostDisconnection()
+        {
+            if (showDebugLogs)
+                Debug.Log("🚪 Host desconectado - Saliendo del lobby");
+            
+            // Salir del canal de voz de Vivox
+            _ = LeaveLobbyVoiceChannel();
+            
+            // Limpiar estado del lobby
+            CleanupLobbyState();
+            
+            // Desconectar cliente
+            if (NetworkManager.Singleton != null)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+            
+            // Disparar evento
+            OnLobbyLeft?.Invoke();
+            
+            // Volver al menú principal
+            StartCoroutine(LoadMenuAfterDelay());
         }
         
         public override void OnDestroy()
@@ -252,15 +414,22 @@ namespace Blanco.Networking
                     IsPrivate = false,
                     Data = new Dictionary<string, DataObject>
                     {
-                        { "JoinCode", new DataObject(DataObject.VisibilityOptions.Member, joinCode) }
+                        { "JoinCode", new DataObject(DataObject.VisibilityOptions.Public, joinCode) },
+                        { "HostId", new DataObject(DataObject.VisibilityOptions.Public, AuthenticationService.Instance.PlayerId) }
                     },
-                    Player = new Player(id: Authentication.GetPlayerId())
+                    Player = new Player
+                    {
+                        Data = new Dictionary<string, PlayerDataObject>
+                        {
+                            { "IsHost", new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public, "true") }
+                        }
+                    }
                 };
                 
                 Lobby lobby = await LobbyService.Instance.CreateLobbyAsync(lobbyName, maxPlayers, lobbyOptions);
                 
                 if (showDebugLogs)
-                    Debug.Log($"✅ Lobby creado: {lobby.Name} - Código: {lobby.LobbyCode}");
+                    Debug.Log($"✅ Lobby creado: {lobby.Name} (ID: {lobby.Id})");
                 
                 return lobby;
             }
@@ -336,19 +505,37 @@ namespace Blanco.Networking
         {
             try
             {
-                JoinLobbyByCodeOptions options = new JoinLobbyByCodeOptions
-                {
-                    Player = new Player(id: Authentication.GetPlayerId())
-                };
+                if (showDebugLogs)
+                    Debug.Log($"🔍 Buscando lobby con código: {joinCode}");
                 
-                Lobby lobby = await LobbyService.Instance.JoinLobbyByCodeAsync(joinCode, options);
+                // Verificar si ya estamos en un lobby
+                if (CurrentLobby != null)
+                {
+                    if (showDebugLogs)
+                        Debug.Log("⚠️ Ya estás en un lobby, saliendo primero...");
+                    
+                    // Salir del lobby actual
+                    try
+                    {
+                        await LobbyService.Instance.RemovePlayerAsync(CurrentLobby.Id, AuthenticationService.Instance.PlayerId);
+                        CurrentLobby = null;
+                    }
+                    catch (Exception e)
+                    {
+                        if (showDebugLogs)
+                            Debug.LogWarning($"⚠️ Error al salir del lobby anterior: {e.Message}");
+                    }
+                }
+                
+                // Unirse al nuevo lobby
+                var lobby = await LobbyService.Instance.JoinLobbyByCodeAsync(joinCode);
                 
                 if (showDebugLogs)
-                    Debug.Log($"✅ Unido al lobby: {lobby.Name}");
+                    Debug.Log($"✅ Lobby encontrado: {lobby.Name} (ID: {lobby.Id})");
                 
                 return lobby;
             }
-            catch (LobbyServiceException e)
+            catch (Exception e)
             {
                 Debug.LogError($"❌ Error al unirse al lobby: {e.Message}");
                 return null;
@@ -420,6 +607,11 @@ namespace Blanco.Networking
             if (clientId == NetworkManager.Singleton.LocalClientId)
             {
                 await LeaveLobbyVoiceChannel();
+                Debug.Log("🚪 Has salido del lobby");
+            }
+            else
+            {
+                Debug.Log($"🚪 Jugador {clientId} ha salido del lobby");
             }
         }
         
@@ -477,6 +669,26 @@ namespace Blanco.Networking
             {
                 Debug.LogError($"❌ Error al salir del canal de voz: {e.Message}");
             }
+        }
+        
+        private void CleanupLobbyState()
+        {
+            // Limpiar PlayerPrefs
+            PlayerPrefs.DeleteKey("LobbyCode");
+            PlayerPrefs.DeleteKey("LobbyId");
+            PlayerPrefs.Save();
+            
+            // Limpiar lobby actual
+            CurrentLobby = null;
+            
+            // Solo limpiar la lista de jugadores si es el servidor
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && players != null)
+            {
+                players.Clear();
+            }
+            
+            if (showDebugLogs)
+                Debug.Log("🧹 Estado del lobby limpiado");
         }
         
         private string GetCurrentLobbyCode()
@@ -586,13 +798,25 @@ namespace Blanco.Networking
         {
             if (CurrentLobby != null)
             {
+                try
+                {
+                    // Salir del lobby de Unity Services
+                    await LobbyService.Instance.RemovePlayerAsync(CurrentLobby.Id, AuthenticationService.Instance.PlayerId);
+                    
+                    if (showDebugLogs)
+                        Debug.Log("🚪 Jugador removido del lobby de Unity Services");
+                }
+                catch (Exception e)
+                {
+                    if (showDebugLogs)
+                        Debug.LogWarning($"⚠️ Error al salir del lobby de Unity Services: {e.Message}");
+                }
+                
                 // Salir del canal de voz de Vivox
                 await LeaveLobbyVoiceChannel();
                 
-                // Limpiar PlayerPrefs
-                PlayerPrefs.DeleteKey("LobbyCode");
-                PlayerPrefs.DeleteKey("LobbyId");
-                PlayerPrefs.Save();
+                // Limpiar estado del lobby
+                CleanupLobbyState();
                 
                 // Desconectar
                 if (NetworkManager.Singleton != null)
@@ -600,12 +824,102 @@ namespace Blanco.Networking
                     NetworkManager.Singleton.Shutdown();
                 }
                 
-                // Notificar evento
+                if (showDebugLogs)
+                    Debug.Log("🚪 Lobby abandonado voluntariamente");
+                
+                // Disparar evento
                 OnLobbyLeft?.Invoke();
                 
-                if (showDebugLogs)
-                    Debug.Log("🚪 Lobby abandonado");
+                // Forzar la carga de la escena del menú después de un breve delay
+                StartCoroutine(LoadMenuAfterDelay());
             }
+        }
+        
+        public async void CloseLobby()
+        {
+            if (!NetworkManager.Singleton.IsServer)
+            {
+                Debug.LogWarning("⚠️ Solo el host puede cerrar el lobby");
+                return;
+            }
+            
+            if (showDebugLogs)
+                Debug.Log("🚪 Host cerrando lobby para todos...");
+            
+            // Notificar a todos los clientes que el lobby se está cerrando
+            CloseLobbyClientRpc();
+            
+            // Esperar un momento para que los clientes reciban el mensaje
+            await Task.Delay(1000);
+            
+            try
+            {
+                // Eliminar el lobby de Unity Services
+                if (CurrentLobby != null)
+                {
+                    await LobbyService.Instance.DeleteLobbyAsync(CurrentLobby.Id);
+                    
+                    if (showDebugLogs)
+                        Debug.Log("🚪 Lobby eliminado de Unity Services");
+                }
+            }
+            catch (Exception e)
+            {
+                if (showDebugLogs)
+                    Debug.LogWarning($"⚠️ Error al eliminar lobby de Unity Services: {e.Message}");
+            }
+            
+            // Salir del canal de voz de Vivox
+            await LeaveLobbyVoiceChannel();
+            
+            // Limpiar estado del lobby
+            CleanupLobbyState();
+            
+            // Desconectar servidor
+            if (NetworkManager.Singleton != null)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+            
+            if (showDebugLogs)
+                Debug.Log("🚪 Lobby cerrado por el host");
+            
+            // Disparar evento
+            OnLobbyLeft?.Invoke();
+            
+            // Forzar la carga de la escena del menú después de un breve delay
+            StartCoroutine(LoadMenuAfterDelay());
+        }
+        
+        [ClientRpc]
+        private void CloseLobbyClientRpc()
+        {
+            if (showDebugLogs)
+                Debug.Log("🚪 El host ha cerrado el lobby - Desconectando...");
+            
+            // Salir del canal de voz de Vivox
+            _ = LeaveLobbyVoiceChannel();
+            
+            // Limpiar estado del lobby (sin tocar NetworkVariables)
+            CleanupLobbyState();
+            
+            // Desconectar cliente inmediatamente
+            if (NetworkManager.Singleton != null)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+            
+            // Disparar evento
+            OnLobbyLeft?.Invoke();
+            
+            // Forzar la carga de la escena del menú después de un breve delay
+            StartCoroutine(LoadMenuAfterDelay());
+        }
+        
+        private System.Collections.IEnumerator LoadMenuAfterDelay()
+        {
+            yield return new WaitForSeconds(0.5f);
+            UnityEngine.SceneManagement.SceneManager.LoadScene("Menu");
         }
         
         public List<PlayerInfo> GetPlayers()
