@@ -12,6 +12,7 @@ public class RemotePlayerController : NetworkBehaviour
     [SerializeField] private PlayerActionsSync actionsSync;
     [SerializeField] private Rig rightHandRig;
     [SerializeField] private Rig cardHandRig;
+    [SerializeField] private GameObject revolver;
 
     private void Awake()
     {
@@ -25,8 +26,10 @@ public class RemotePlayerController : NetworkBehaviour
         {
             actionsSync.isPlayerPointing.OnValueChanged += OnPointingChanged;
             actionsSync.isPlayerCheckingCard.OnValueChanged += OnCheckingCardChanged;
+            actionsSync.isPlayerAiming.OnValueChanged += OnPlayerAiming;
         }
     }
+
 
     void Update()
     {
@@ -52,5 +55,14 @@ public class RemotePlayerController : NetworkBehaviour
         float targetWeight = newValue ? 1f : 0f;
 
         DOTween.To(() => cardHandRig.weight, x => cardHandRig.weight = x, targetWeight, 0.3f);
+    }
+
+    private void OnPlayerAiming(bool previousValue, bool newValue)
+    {
+        revolver.SetActive(newValue);
+
+        float targetWeight = newValue ? 1f : 0f;
+
+        DOTween.To(() => rightHandRig.weight, x => rightHandRig.weight = x, targetWeight, 0.3f);
     }
 }
