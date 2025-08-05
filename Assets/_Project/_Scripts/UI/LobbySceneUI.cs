@@ -22,12 +22,17 @@ namespace Blanco.UI
         
         private void Start()
         {
-            // Buscar el LobbyManager
-            lobbyManager = FindObjectOfType<Blanco.Networking.LobbyManager>();
+            // Usar el singleton LobbyManager
+            lobbyManager = Blanco.Networking.LobbyManager.Instance;
             if (lobbyManager == null)
             {
-                Debug.LogError("❌ LobbyManager no encontrado en la escena");
-                return;
+                Debug.LogWarning("⚠️ LobbyManager.Instance es null, creando uno automáticamente...");
+                
+                // Crear un GameObject con LobbyManager
+                GameObject lobbyManagerGO = new GameObject("LobbyManager");
+                lobbyManager = lobbyManagerGO.AddComponent<Blanco.Networking.LobbyManager>();
+                
+                Debug.Log("✅ LobbyManager creado automáticamente");
             }
             
             // Suscribirse a eventos

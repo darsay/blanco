@@ -3,6 +3,7 @@ using Unity.Services.Authentication;
 using UnityEngine;
 using System.Threading.Tasks;
 using System;
+using Unity.Services.Vivox;
 
 #if UNITY_EDITOR
 using ParrelSync;
@@ -59,7 +60,14 @@ namespace Blanco.Networking
             }
 #endif
             
+            // Inicializar Unity Services
             await UnityServices.InitializeAsync(initializationOptions);
+            
+            // Inicializar Vivox
+            await VivoxService.Instance.InitializeAsync();
+            
+            if (showDebugLogs)
+                Debug.Log("🎤 Vivox inicializado correctamente");
         }
         
         public string GetServicesInfo()

@@ -6,6 +6,7 @@ using Unity.Services.Lobbies;
 using Unity.Services.Lobbies.Models;
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
+using Unity.Services.Vivox;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -18,20 +19,21 @@ namespace Blanco.Networking
     {
         [Header("Lobby Settings")]
         [SerializeField] private int maxPlayers = 4;
-        [SerializeField] private string sceneToLoad = "Lobby";
         
         [Header("Debug")]
         [SerializeField] private bool showDebugLogs = true;
         
-        // Lobby actual
+        // Singleton
+        public static LobbyManager Instance { get; private set; }
+        
         public static Lobby CurrentLobby;
         private static UnityTransport _transport;
-        
+
         // NetworkVariables para sincronizar datos del lobby
         private NetworkVariable<LobbyState> lobbyState = new NetworkVariable<LobbyState>(LobbyState.Waiting);
         private NetworkList<PlayerInfo> players = new NetworkList<PlayerInfo>();
         
-        // Eventos para la UI
+        // Eventos del lobby
         public static event Action OnLobbyLeft;
         public event Action<LobbyState> OnLobbyStateChanged;
         public event Action OnGameStarting;
@@ -81,18 +83,27 @@ namespace Blanco.Networking
         
         private static UnityTransport Transport
         {
-            get => _transport != null ? _transport : _transport = FindObjectOfType<UnityTransport>();
-            set => _transport = value;
+            get
+            {
+                if (_transport == null)
+                    _transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+                return _transport;
+            }
         }
         
         private void Awake()
         {
-            DontDestroyOnLoad(this);
-        }
-        
-        private void Start()
-        {
-            // Suscribirse a eventos de red
+            // Singleton pattern
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+            
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+            
+            // Configurar eventos de red
             if (NetworkManager.Singleton != null)
             {
                 NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
@@ -100,35 +111,53 @@ namespace Blanco.Networking
             }
         }
         
+        private void Start()
+        {
+            // Configurar eventos de Vivox
+            if (VivoxService.Instance != null)
+            {
+                VivoxService.Instance.LoggedIn += OnVivoxLoggedIn;
+                VivoxService.Instance.LoggedOut += OnVivoxLoggedOut;
+                VivoxService.Instance.ChannelJoined += OnVivoxChannelJoined;
+                VivoxService.Instance.ChannelLeft += OnVivoxChannelLeft;
+                VivoxService.Instance.ParticipantAddedToChannel += OnVivoxParticipantAdded;
+                VivoxService.Instance.ParticipantRemovedFromChannel += OnVivoxParticipantRemoved;
+            }
+        }
+        
         public override void OnNetworkSpawn()
         {
-            base.OnNetworkSpawn();
+            if (showDebugLogs)
+                Debug.Log("🌐 LobbyManager iniciado en red");
             
-            Debug.Log("🔧 LobbyManager NetworkSpawn");
-            
+            // Configurar el estado inicial del lobby
             if (NetworkManager.Singleton.IsServer)
             {
                 lobbyState.Value = LobbyState.Waiting;
-                Debug.Log("🟢 Host iniciado - Lobby en espera");
-            }
-            else
-            {
-                Debug.Log("🔵 Cliente conectado al lobby");
             }
         }
         
         public override void OnDestroy()
         {
-            base.OnDestroy();
-            
-            // Desuscribirse de eventos
+            // Limpiar eventos de red
             if (NetworkManager.Singleton != null)
             {
                 NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
                 NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
             }
+            
+            // Limpiar eventos de Vivox
+            if (VivoxService.Instance != null)
+            {
+                VivoxService.Instance.LoggedIn -= OnVivoxLoggedIn;
+                VivoxService.Instance.LoggedOut -= OnVivoxLoggedOut;
+                VivoxService.Instance.ChannelJoined -= OnVivoxChannelJoined;
+                VivoxService.Instance.ChannelLeft -= OnVivoxChannelLeft;
+                VivoxService.Instance.ParticipantAddedToChannel -= OnVivoxParticipantAdded;
+                VivoxService.Instance.ParticipantRemovedFromChannel -= OnVivoxParticipantRemoved;
+            }
         }
-        
+
         #region Host - Crear Lobby
         
         public async Task<bool> CreateLobby(string lobbyName)
@@ -353,12 +382,12 @@ namespace Blanco.Networking
                 return false;
             }
         }
-        
+
         #endregion
-        
-        #region Network Events
-        
-        private void OnClientConnected(ulong clientId)
+
+        #region Vivox
+
+        private async void OnClientConnected(ulong clientId)
         {
             if (showDebugLogs)
                 Debug.Log($"🟢 Cliente conectado: {clientId}");
@@ -368,9 +397,15 @@ namespace Blanco.Networking
             {
                 AddPlayer(clientId, $"Player_{clientId}", clientId == NetworkManager.Singleton.LocalClientId);
             }
+            
+            // Unirse al canal de voz SOLO si es el jugador local
+            if (clientId == NetworkManager.Singleton.LocalClientId)
+            {
+                await JoinLobbyVoiceChannel();
+            }
         }
         
-        private void OnClientDisconnected(ulong clientId)
+        private async void OnClientDisconnected(ulong clientId)
         {
             if (showDebugLogs)
                 Debug.Log($"🔴 Cliente desconectado: {clientId}");
@@ -380,10 +415,125 @@ namespace Blanco.Networking
             {
                 RemovePlayer(clientId);
             }
+            
+            // Salir del canal de voz si es el jugador local
+            if (clientId == NetworkManager.Singleton.LocalClientId)
+            {
+                await LeaveLobbyVoiceChannel();
+            }
         }
         
-        #endregion
+        private async Task JoinLobbyVoiceChannel()
+        {
+            try
+            {
+                if (showDebugLogs)
+                    Debug.Log("🎤 Uniéndose al canal de voz del lobby...");
+                
+                // Obtener el código del lobby
+                string lobbyCode = GetCurrentLobbyCode();
+                if (string.IsNullOrEmpty(lobbyCode))
+                {
+                    Debug.LogWarning("⚠️ No hay lobby activo, usando canal por defecto");
+                    lobbyCode = "DefaultLobby";
+                }
+                
+                // Hacer login a Vivox si no está logueado
+                if (!VivoxService.Instance.IsLoggedIn)
+                {
+                    if (showDebugLogs)
+                        Debug.Log("🎤 Haciendo login a Vivox...");
+                    
+                    var loginOptions = new LoginOptions();
+                    loginOptions.DisplayName = $"Player_{AuthenticationService.Instance.PlayerId}";
+                    await VivoxService.Instance.LoginAsync(loginOptions);
+                }
+                
+                // Unirse al canal usando las APIs v16
+                await VivoxService.Instance.JoinGroupChannelAsync(lobbyCode, ChatCapability.AudioOnly);
+                
+                if (showDebugLogs)
+                    Debug.Log($"✅ Conectado al canal de voz: {lobbyCode}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"❌ Error al unirse al canal de voz: {e.Message}");
+            }
+        }
         
+        private async Task LeaveLobbyVoiceChannel()
+        {
+            try
+            {
+                if (showDebugLogs)
+                    Debug.Log("🎤 Saliendo del canal de voz...");
+                
+                await VivoxService.Instance.LeaveAllChannelsAsync();
+                
+                if (showDebugLogs)
+                    Debug.Log("✅ Desconectado del canal de voz");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"❌ Error al salir del canal de voz: {e.Message}");
+            }
+        }
+        
+        private string GetCurrentLobbyCode()
+        {
+            string lobbyCode = PlayerPrefs.GetString("LobbyCode", "");
+            
+            if (string.IsNullOrEmpty(lobbyCode) && CurrentLobby != null)
+            {
+                lobbyCode = CurrentLobby.LobbyCode;
+            }
+            
+            return lobbyCode;
+        }
+        
+        // Eventos de Vivox
+        private void OnVivoxLoggedIn()
+        {
+            if (showDebugLogs)
+                Debug.Log("🎤 Usuario logueado en Vivox");
+        }
+        
+        private void OnVivoxLoggedOut()
+        {
+            if (showDebugLogs)
+                Debug.Log("🎤 Usuario deslogueado de Vivox");
+        }
+        
+        private void OnVivoxChannelJoined(string channelName)
+        {
+            if (showDebugLogs)
+                Debug.Log($"🎤 Canal unido: {channelName}");
+        }
+        
+        private void OnVivoxChannelLeft(string channelName)
+        {
+            if (showDebugLogs)
+                Debug.Log($"🎤 Canal abandonado: {channelName}");
+        }
+        
+        private void OnVivoxParticipantAdded(VivoxParticipant participant)
+        {
+            if (showDebugLogs)
+                Debug.Log($"🎤 Participante agregado: {participant.DisplayName}");
+        }
+        
+        private void OnVivoxParticipantRemoved(VivoxParticipant participant)
+        {
+            if (showDebugLogs)
+                Debug.Log($"🎤 Participante removido: {participant.DisplayName}");
+        }
+
+        #endregion
+
+        #region Network Events
+
+        #endregion
+
         #region Player Management
         
         private void AddPlayer(ulong clientId, string playerName, bool isHost)
@@ -432,10 +582,13 @@ namespace Blanco.Networking
         
         #region Public Methods
         
-        public void LeaveLobby()
+        public async void LeaveLobby()
         {
             if (CurrentLobby != null)
             {
+                // Salir del canal de voz de Vivox
+                await LeaveLobbyVoiceChannel();
+                
                 // Limpiar PlayerPrefs
                 PlayerPrefs.DeleteKey("LobbyCode");
                 PlayerPrefs.DeleteKey("LobbyId");
@@ -521,13 +674,12 @@ namespace Blanco.Networking
         [ClientRpc]
         private void StartGameClientRpc()
         {
-            Debug.Log("🎮 Cambiando a escena de gameplay...");
-            UnityEngine.SceneManagement.SceneManager.LoadScene("Gameplay");
+            Debug.Log("🎮 Juego iniciado");
         }
         
         public void StartGame()
         {
-            if (NetworkManager.Singleton.IsHost && lobbyState.Value == LobbyState.Waiting)
+            if (NetworkManager.Singleton.IsServer)
             {
                 StartGameServerRpc();
             }
@@ -535,21 +687,17 @@ namespace Blanco.Networking
         
         #endregion
         
-        #region Debug Methods
-        
         [ContextMenu("Debug Lobby Info")]
         public void DebugLobbyInfo()
         {
-            Debug.Log("🔍 === INFO DEL LOBBY ===");
-            Debug.Log($"🔍 Lobby actual: {(CurrentLobby != null ? CurrentLobby.Name : "Ninguno")}");
-            Debug.Log($"🔍 Código: {(CurrentLobby != null ? CurrentLobby.LobbyCode : "Ninguno")}");
-            Debug.Log($"🔍 Jugadores: {players.Count}/{maxPlayers}");
-            Debug.Log($"🔍 Estado: {lobbyState.Value}");
-            Debug.Log($"🔍 IsServer: {NetworkManager.Singleton.IsServer}");
-            Debug.Log($"🔍 IsClient: {NetworkManager.Singleton.IsClient}");
-            Debug.Log("🔍 === FIN INFO ===");
+            string info = "🎮 === LOBBY INFO ===\n";
+            info += $"Estado: {lobbyState.Value}\n";
+            info += $"Jugadores: {players.Count}/{maxPlayers}\n";
+            info += $"Es Host: {IsHostPlayer()}\n";
+            info += $"Vivox Logueado: {VivoxService.Instance.IsLoggedIn}\n";
+            info += $"Canales Activos: {VivoxService.Instance.ActiveChannels.Count}\n";
+            info += "🎮 === FIN INFO ===";
+            Debug.Log(info);
         }
-        
-        #endregion
     }
 } 
