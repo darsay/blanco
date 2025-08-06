@@ -29,7 +29,6 @@ public class MatchManager : NetworkBehaviour
         if(!IsServer) return;
 
         playersAndScores[clientId] = 0;
-        UIManager.Instance.AddNewPlayerToPlayerList(clientId);
     }
 
     public void OnBeginMatch()
@@ -46,6 +45,6 @@ public class MatchManager : NetworkBehaviour
     [ClientRpc]
     public void OnBeginMatchClientRpc()
     {
-        UIManager.Instance.waitingUI.SetActive(false);
+        UIGameplayManager.Instance.waitingUI.SetActive(false);
     }
 }

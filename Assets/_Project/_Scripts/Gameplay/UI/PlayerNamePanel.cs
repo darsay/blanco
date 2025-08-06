@@ -6,8 +6,23 @@ public class PlayerNamePanel : MonoBehaviour
     [SerializeField]
     TextMeshProUGUI playerNameText;
 
-    public void SetName(string name)
+    public void SetName(Blanco.Networking.LobbyManager.PlayerInfo player)
     {
-        playerNameText.text = name;
+        string displayName = player.playerName.ToString();
+        if (player.isHost)
+        {
+            displayName += " (Host)";
+        }
+        
+        playerNameText.text = displayName;
+
+        if (player.isHost)
+        {
+            playerNameText.color = Color.yellow;
+        }
+        else
+        {
+            playerNameText.color = Color.white;
+        }
     }
 }

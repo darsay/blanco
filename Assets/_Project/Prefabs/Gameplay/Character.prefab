@@ -8350,7 +8350,7 @@ GameObject:
   - component: {fileID: 6504479955033473721}
   - component: {fileID: 7356822910147763979}
   m_Layer: 0
-  m_Name: RemoteLookController
+  m_Name: RemotePlayerController
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

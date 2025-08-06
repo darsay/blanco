@@ -46,7 +46,7 @@ public class RoundManager : NetworkBehaviour
 
             if (player != null)
             {
-                UIManager.Instance.SetInfoTextClientRpc($"Player {client.ClientId}'s card has been revealed!");
+                UIGameplayManager.Instance.SetInfoTextClientRpc($"Player {client.ClientId}'s card has been revealed!");
                 player.ShowCardClientRpc(true);
                 yield return new WaitForSeconds(3f);
                 player.ShowCardClientRpc(false);
@@ -54,7 +54,7 @@ public class RoundManager : NetworkBehaviour
             }
         }
 
-        UIManager.Instance.HideInfoTextClientRpc();
+        UIGameplayManager.Instance.HideInfoTextClientRpc();
         StartCoroutine(SayWordCoroutine());
     }
 
@@ -69,10 +69,10 @@ public class RoundManager : NetworkBehaviour
 
             if (player != null)
             {
-                UIManager.Instance.SetInfoTextClientRpc($"Player {client.ClientId}'s is speaking!");
-                UIManager.Instance.StartGameTimer(5f);
+                UIGameplayManager.Instance.SetInfoTextClientRpc($"Player {client.ClientId}'s is speaking!");
+                UIGameplayManager.Instance.StartGameTimer(5f);
                 yield return new WaitForSeconds(5f);
-                UIManager.Instance.HideInfoTextClientRpc();
+                UIGameplayManager.Instance.HideInfoTextClientRpc();
                 yield return new WaitForSeconds(1f);
             }
         }
@@ -83,7 +83,7 @@ public class RoundManager : NetworkBehaviour
     IEnumerator TalkingCoroutine()
     {
         currentState.Value = RoundState.Talking;
-        UIManager.Instance.StartGameTimer(10f);
+        UIGameplayManager.Instance.StartGameTimer(10f);
         yield return new WaitForSeconds(10f);
 
         foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
@@ -111,7 +111,7 @@ public class RoundManager : NetworkBehaviour
         }
         currentState.Value = RoundState.Voting;
         yield return new WaitForSeconds(30f);
-        UIManager.Instance.StartGameTimer(30f);
+        UIGameplayManager.Instance.StartGameTimer(30f);
     }
 
     void PickBlancoPlayer()

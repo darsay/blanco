@@ -61,16 +61,6 @@ namespace Blanco.UI
             if (joinLobbyButton != null)
                 joinLobbyButton.onClick.AddListener(OnJoinLobbyClicked);
             
-            // Configurar botones del panel crear lobby (no usado por ahora)
-            // if (startButton != null)
-            //     startButton.onClick.AddListener(OnStartGameClicked);
-            // 
-            // if (backFromCreateButton != null)
-            //     backFromCreateButton.onClick.AddListener(OnBackFromCreateClicked);
-            // 
-            // if (copyCodeButton != null)
-            //     copyCodeButton.onClick.AddListener(OnCopyCodeClicked);
-            
             // Configurar botones del panel unirse
             if (joinButton != null)
                 joinButton.onClick.AddListener(OnJoinButtonClicked);
@@ -150,15 +140,6 @@ namespace Blanco.UI
             errorPanel?.SetActive(false);
         }
         
-        // private void ShowCreateLobbyPanel()
-        // {
-        //     mainPanel?.SetActive(false);
-        //     createLobbyPanel?.SetActive(true);
-        //     joinLobbyPanel?.SetActive(false);
-        //     loadingPanel?.SetActive(false);
-        //     errorPanel?.SetActive(false);
-        // }
-        
         private void ShowJoinLobbyPanel()
         {
             mainPanel?.SetActive(false);
@@ -231,11 +212,6 @@ namespace Blanco.UI
             ShowJoinLobbyPanel();
         }
         
-        // private void OnBackFromCreateClicked()
-        // {
-        //     ShowMainPanel();
-        // }
-        
         private void OnBackFromJoinClicked()
         {
             ShowMainPanel();
@@ -245,56 +221,6 @@ namespace Blanco.UI
         {
             ShowMainPanel();
         }
-        
-        // private void OnCopyCodeClicked()
-        // {
-        //     string lobbyCode = PlayerPrefs.GetString("LobbyCode", "");
-        //     if (!string.IsNullOrEmpty(lobbyCode))
-        //     {
-        //         GUIUtility.systemCopyBuffer = lobbyCode;
-        //         Debug.Log($"✅ Código copiado: {lobbyCode}");
-        // }
-        // }
-        
-        // private async void OnStartGameClicked()
-        // {
-        //     if (isProcessing) return;
-        //     
-        //     isProcessing = true;
-        //     ShowLoadingPanel("Creando lobby...");
-        //     
-        //     try
-        //     {
-        //         // Generar nombre del lobby
-        //         string lobbyName = GenerateLobbyName();
-        //         
-        //         // Crear lobby
-        //         bool success = await lobbyManager.CreateLobby(lobbyName);
-        //         
-        //         if (success)
-        //         {
-        //             // Mostrar código del lobby
-        //             string lobbyCode = PlayerPrefs.GetString("LobbyCode", "");
-        //             if (lobbyCodeText != null)
-        //                 lobbyCodeText.text = $"Código: {lobbyCode}";
-        //             
-        //             // Cambiar a escena de lobby
-        //             UnityEngine.SceneManagement.SceneManager.LoadScene("Lobby");
-        //         }
-        //         else
-        //         {
-        //             ShowErrorPanel("❌ Error al crear el lobby. Inténtalo de nuevo.");
-        //             isProcessing = false;
-        //         }
-        //     }
-        //     catch (System.Exception e)
-        //     {
-        //         Debug.LogError($"Error al crear lobby: {e.Message}");
-        //         ShowErrorPanel($"❌ Error: {e.Message}");
-        //         ShowErrorPanel($"❌ Error: {e.Message}");
-        //         isProcessing = false;
-        //     }
-        // }
         
         private async void OnJoinButtonClicked()
         {
