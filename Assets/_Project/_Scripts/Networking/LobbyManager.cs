@@ -610,13 +610,29 @@ namespace Blanco.Networking
             if (showDebugLogs)
                 Debug.Log($"🔗 Cliente conectado: {clientId}");
             
-            // Solo el servidor debe sincronizar los jugadores desde Unity Services
+            // Solo el servidor debe manejar los jugadores
             if (NetworkManager.Singleton.IsServer)
             {
                 if (showDebugLogs)
-                    Debug.Log($"🔍 Servidor sincronizando jugadores desde Unity Services");
+                    Debug.Log($"🔍 Servidor añadiendo jugador con clientId: {clientId}");
                 
-                await SyncPlayersFromUnityServices();
+                // Para clientes que no son el host, necesitamos actualizar CurrentLobby
+                if (clientId > 0)
+                {
+                    if (showDebugLogs)
+                        Debug.Log($"🔄 Actualizando lobby para obtener información del cliente {clientId}");
+                    
+                    // Pequeño delay y actualizar lobby solo para clientes nuevos
+                    await Task.Delay(2000); // Más tiempo para que Unity Services se actualice
+                    await UpdateCurrentLobbyForNewClient();
+                }
+                
+                // Usar clientId como nombre temporal hasta que se sincronice
+                string playerName = $"Player_{clientId}";
+                bool isHost = clientId == 0; // El primer cliente conectado es el host
+                
+                // Añadir jugador inmediatamente
+                AddPlayerDirectly(clientId, playerName, isHost);
             }
             
             // Unirse al canal de voz solo si es el cliente local
@@ -787,33 +803,102 @@ namespace Blanco.Networking
 
         #region Network Events
 
-        #endregion
-
-        #region Player Management
-        
-        private void AddPlayer(ulong clientId, string playerName, bool isHost)
+                private void AddPlayerDirectly(ulong clientId, string playerName, bool isHost)
         {
             if (!NetworkManager.Singleton.IsServer) return;
             
+            // Intentar obtener el nombre correcto desde Unity Services
+            string correctPlayerName = GetPlayerNameFromUnityServices((int)clientId);
+            if (!string.IsNullOrEmpty(correctPlayerName))
+            {
+                playerName = correctPlayerName;
+            }
+            
+            // Verificar si es host desde Unity Services
+            bool correctIsHost = GetIsHostFromUnityServices((int)clientId);
+            
             if (showDebugLogs)
-                Debug.Log($"🔧 AddPlayer llamado - ClientID: {clientId}, Nombre: '{playerName}', EsHost: {isHost}");
+                Debug.Log($"🔧 AddPlayerDirectly - ClientID: {clientId}, Nombre: '{playerName}', EsHost: {correctIsHost}");
             
             var playerInfo = new PlayerInfo
             {
                 clientId = clientId,
                 playerName = new FixedString32Bytes(playerName),
                 isReady = true,
-                isHost = isHost
+                isHost = correctIsHost
             };
             
             players.Add(playerInfo);
             
             if (showDebugLogs)
-                Debug.Log($"➕ Jugador agregado: {playerName} (ID: {clientId}, Host: {isHost})");
+                Debug.Log($"➕ Jugador agregado directamente: {playerName} (ID: {clientId}, Host: {correctIsHost})");
             
             // Notificar cambio en la lista de jugadores
             NotifyPlayersUpdated();
         }
+        
+        private string GetPlayerNameFromUnityServices(int playerIndex)
+        {
+            if (CurrentLobby == null || CurrentLobby.Players == null || playerIndex >= CurrentLobby.Players.Count)
+                return null;
+            
+            var player = CurrentLobby.Players[playerIndex];
+            if (player.Data != null && player.Data.ContainsKey("PlayerName"))
+            {
+                string playerName = player.Data["PlayerName"].Value;
+                if (showDebugLogs)
+                    Debug.Log($"✅ Nombre obtenido desde Unity Services para índice {playerIndex}: '{playerName}'");
+                return playerName;
+            }
+            
+            return null;
+        }
+        
+        private bool GetIsHostFromUnityServices(int playerIndex)
+        {
+            if (CurrentLobby == null || CurrentLobby.Players == null || playerIndex >= CurrentLobby.Players.Count)
+                return playerIndex == 0; // Fallback: primer jugador es host
+            
+            var player = CurrentLobby.Players[playerIndex];
+            if (player.Data != null && player.Data.ContainsKey("IsHost"))
+            {
+                bool isHost = player.Data["IsHost"].Value == "true";
+                if (showDebugLogs)
+                    Debug.Log($"✅ IsHost obtenido desde Unity Services para índice {playerIndex}: {isHost}");
+                return isHost;
+            }
+            
+            return playerIndex == 0; // Fallback: primer jugador es host
+        }
+        
+        private async Task UpdateCurrentLobbyForNewClient()
+        {
+            if (CurrentLobby == null)
+                return;
+            
+            try
+            {
+                if (showDebugLogs)
+                    Debug.Log($"🔄 Actualizando CurrentLobby para obtener información de nuevos clientes");
+                
+                var updatedLobby = await LobbyService.Instance.GetLobbyAsync(CurrentLobby.Id);
+                if (updatedLobby != null)
+                {
+                    CurrentLobby = updatedLobby;
+                    if (showDebugLogs)
+                        Debug.Log($"✅ CurrentLobby actualizado, ahora tiene {CurrentLobby.Players.Count} jugadores");
+                }
+            }
+            catch (Exception e)
+            {
+                if (showDebugLogs)
+                    Debug.LogWarning($"⚠️ No se pudo actualizar CurrentLobby: {e.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region Player Management
         
         private void RemovePlayer(ulong clientId)
         {
@@ -836,27 +921,35 @@ namespace Blanco.Networking
             }
         }
         
-        private async Task SyncPlayersFromUnityServices()
+        private async Task SyncPlayersFromUnityServices(bool refreshLobby = false)
         {
             if (!NetworkManager.Singleton.IsServer || CurrentLobby == null)
                 return;
             
             try
             {
-                // Obtener la información actualizada del lobby
-                var updatedLobby = await LobbyService.Instance.GetLobbyAsync(CurrentLobby.Id);
-                if (updatedLobby == null)
-                    return;
+                // Si necesitamos actualizar el lobby, hacerlo antes de sincronizar
+                if (refreshLobby)
+                {
+                    if (showDebugLogs)
+                        Debug.Log($"🔄 Actualizando información del lobby desde Unity Services");
+                    
+                    var updatedLobby = await LobbyService.Instance.GetLobbyAsync(CurrentLobby.Id);
+                    if (updatedLobby != null)
+                    {
+                        CurrentLobby = updatedLobby;
+                    }
+                }
                 
                 if (showDebugLogs)
-                    Debug.Log($"🔄 Sincronizando {updatedLobby.Players.Count} jugadores desde Unity Services");
+                    Debug.Log($"🔄 Sincronizando {CurrentLobby.Players.Count} jugadores desde Unity Services");
                 
                 // Limpiar la lista actual
                 players.Clear();
                 
-                // Agregar cada jugador desde Unity Services
+                // Agregar cada jugador desde Unity Services usando CurrentLobby
                 ulong clientIdCounter = 0;
-                foreach (var player in updatedLobby.Players)
+                foreach (var player in CurrentLobby.Players)
                 {
                     string playerName = $"Player_{clientIdCounter}";
                     bool isHost = false;
@@ -893,14 +986,81 @@ namespace Blanco.Networking
                 
                 // Notificar cambio en la lista de jugadores
                 NotifyPlayersUpdated();
-                
-                // Actualizar el lobby actual
-                CurrentLobby = updatedLobby;
             }
             catch (Exception e)
             {
                 if (showDebugLogs)
                     Debug.LogError($"❌ Error al sincronizar jugadores: {e.Message}");
+            }
+        }
+        
+        // Método opcional para sincronizar nombres correctos desde Unity Services
+        public async void SyncPlayerNamesFromUnityServices()
+        {
+            if (!NetworkManager.Singleton.IsServer || CurrentLobby == null)
+                return;
+            
+            try
+            {
+                if (showDebugLogs)
+                    Debug.Log($"🔄 Sincronizando nombres desde Unity Services (opcional)");
+                
+                // Mapear nombres desde Unity Services
+                var playerNamesMap = new Dictionary<int, (string name, bool isHost)>();
+                int playerIndex = 0;
+                
+                foreach (var player in CurrentLobby.Players)
+                {
+                    string playerName = $"Player_{playerIndex}";
+                    bool isHost = false;
+                    
+                    if (player.Data != null)
+                    {
+                        if (player.Data.ContainsKey("PlayerName"))
+                        {
+                            playerName = player.Data["PlayerName"].Value;
+                        }
+                        
+                        if (player.Data.ContainsKey("IsHost"))
+                        {
+                            isHost = player.Data["IsHost"].Value == "true";
+                        }
+                    }
+                    
+                    playerNamesMap[playerIndex] = (playerName, isHost);
+                    playerIndex++;
+                }
+                
+                // Actualizar nombres en la lista existente
+                for (int i = 0; i < players.Count; i++)
+                {
+                    if (playerNamesMap.ContainsKey(i))
+                    {
+                        var existingPlayer = players[i];
+                        var (correctName, correctIsHost) = playerNamesMap[i];
+                        
+                        var updatedPlayer = new PlayerInfo
+                        {
+                            clientId = existingPlayer.clientId,
+                            playerName = new FixedString32Bytes(correctName),
+                            isReady = existingPlayer.isReady,
+                            isHost = correctIsHost
+                        };
+                        
+                        players[i] = updatedPlayer;
+                        
+                        if (showDebugLogs)
+                            Debug.Log($"🔄 Nombre actualizado: {correctName} (ID: {existingPlayer.clientId})");
+                    }
+                }
+                
+                // Notificar cambio en la lista de jugadores
+                NotifyPlayersUpdated();
+            }
+            catch (Exception e)
+            {
+                if (showDebugLogs)
+                    Debug.LogWarning($"⚠️ No se pudieron sincronizar nombres: {e.Message}");
             }
         }
         
