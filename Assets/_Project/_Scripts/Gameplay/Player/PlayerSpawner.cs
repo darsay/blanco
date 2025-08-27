@@ -1,7 +1,9 @@
-using Unity.Netcode;
+﻿using Unity.Netcode;
 using UnityEngine;
 using System.Collections.Generic;
 using static MatchManager;
+using Blanco.Networking;
+using static Blanco.Networking.LobbyManager;
 
 public class PlayerSpawner : NetworkBehaviour
 {
@@ -9,6 +11,7 @@ public class PlayerSpawner : NetworkBehaviour
     [SerializeField] private List<Transform> spawnPoints;
     [SerializeField] private Transform lookAtTarget;
     [SerializeField] private PlayerController playerPrefab;
+    private Blanco.Networking.LobbyManager lobbyManager;
     private int nextSpawnIndex = 0;
 
     private void Awake()
@@ -16,41 +19,75 @@ public class PlayerSpawner : NetworkBehaviour
         Instance = this;
     }
 
-    public void SpawnHostPlayer()
+    private void Start()
     {
-        if (IsServer)
+        // Intentar obtener LobbyManager
+        lobbyManager = Blanco.Networking.LobbyManager.Instance;
+        
+        // Si no existe, intentar en Update
+        if (lobbyManager == null)
         {
-            HandleClientConnected(NetworkManager.Singleton.LocalClientId);
+            Debug.LogWarning("⚠️ LobbyManager.Instance es null, intentando en Update...");
+            return;
+        }
+
+        // Suscribirse a eventos
+        lobbyManager.OnPlayerJoin += SpawnPlayer;
+        Debug.Log("✅ PlayerSpawner suscrito a OnPlayerJoin");
+    }
+
+    private void Update()
+    {
+        // Si lobbyManager es null, intentar obtenerlo
+        if (lobbyManager == null)
+        {
+            lobbyManager = Blanco.Networking.LobbyManager.Instance;
+            if (lobbyManager != null)
+            {
+                lobbyManager.OnPlayerJoin += SpawnPlayer;
+                Debug.Log("✅ PlayerSpawner suscrito a OnPlayerJoin (desde Update)");
+            }
         }
     }
 
-    private void OnEnable()
+    private void OnDestroy()
     {
-        if (NetworkManager.Singleton != null)
+        if (lobbyManager != null)
         {
-            NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
+            lobbyManager.OnPlayerJoin -= SpawnPlayer;
         }
     }
 
-    private void OnDisable()
+    public void SpawnPlayer(PlayerInfo player)
     {
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnected;
-        }
-    }
-
-    private void HandleClientConnected(ulong clientId)
-    {
+        Debug.Log($"🎯 SpawnPlayer llamado para {player.playerName} (clientId: {player.clientId})");
+        
         if (!IsServer)
+        {
+            Debug.LogWarning("⚠️ SpawnPlayer llamado pero no es servidor");
             return;
+        }
 
-        Debug.Log($"[SERVER] Spawning player for client {clientId}");
-
-        if (NetworkManager.Singleton.ConnectedClients[clientId].PlayerObject != null)
+        if (NetworkManager.Singleton == null)
+        {
+            Debug.LogError("❌ NetworkManager.Singleton es null");
             return;
+        }
+
+        if (!NetworkManager.Singleton.ConnectedClients.ContainsKey(player.clientId))
+        {
+            Debug.LogWarning($"⚠️ Cliente {player.clientId} no está conectado");
+            return;
+        }
+
+        if (NetworkManager.Singleton.ConnectedClients[player.clientId].PlayerObject != null)
+        {
+            Debug.Log($"⚠️ Cliente {player.clientId} ya tiene PlayerObject");
+            return;
+        }
 
         Transform spawnPoint = GetNextSpawnPoint();
+        Debug.Log($"📍 Spawn point: {spawnPoint.name}");
 
         GameObject playerInstance = Instantiate(playerPrefab.gameObject, spawnPoint.position, spawnPoint.rotation);
         Vector3 direction = (lookAtTarget.position - spawnPoint.position).normalized;
@@ -58,11 +95,24 @@ public class PlayerSpawner : NetworkBehaviour
         playerInstance.transform.rotation = lookRotation;
 
         NetworkObject netObj = playerInstance.GetComponent<NetworkObject>();
-        netObj.SpawnAsPlayerObject(clientId);
+        netObj.SpawnAsPlayerObject(player.clientId);
+        
+        Debug.Log($"✅ Player spawnado exitosamente para {player.playerName}");
+    }
+
+    public void DespawnPlayer(PlayerInfo player)
+    {
+
     }
 
     private Transform GetNextSpawnPoint()
     {
+        if (spawnPoints == null || spawnPoints.Count == 0)
+        {
+            Debug.LogError("❌ No hay spawn points configurados!");
+            return transform; // Fallback
+        }
+        
         Transform point = spawnPoints[nextSpawnIndex];
         nextSpawnIndex = (nextSpawnIndex + 1) % spawnPoints.Count;
         return point;

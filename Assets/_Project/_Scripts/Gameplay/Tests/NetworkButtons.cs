@@ -8,7 +8,6 @@ public class NetworkButtons : MonoBehaviour
     public void StartHost()
     {
         NetworkManager.Singleton.StartHost();
-        spawner.SpawnHostPlayer();
         transform.gameObject.SetActive(false);
     }
 

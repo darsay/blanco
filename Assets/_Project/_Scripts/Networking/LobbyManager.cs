@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine.SceneManagement;
 using Unity.Collections;
+using static Blanco.Networking.LobbyManager;
 
 namespace Blanco.Networking
 {
@@ -46,7 +47,9 @@ namespace Blanco.Networking
         public event Action<LobbyState> OnLobbyStateChanged;
         public event Action OnGameStarting;
         public event Action<List<PlayerInfo>> OnPlayersUpdated;
-        
+        public event Action<PlayerInfo> OnPlayerJoin;
+        public event Action<PlayerInfo> OnPlayerLeave;
+
         public enum LobbyState
         {
             Waiting,
@@ -648,7 +651,7 @@ namespace Blanco.Networking
                 string playerName = clientId == 0 ? "Host" : "Player joining...";
                 bool isHost = clientId == 0; // El primer cliente conectado es el host
                 AddPlayerDirectly(clientId, playerName, isHost);
-                
+
                 // SIEMPRE actualizar nombres de manera asíncrona para todos los jugadores
                 // Esto es especialmente importante cuando re-entras al lobby
                 if (showDebugLogs)
@@ -680,7 +683,8 @@ namespace Blanco.Networking
                     {
                         if (showDebugLogs)
                             Debug.Log($"➖ Removiendo jugador: {players[i].playerName} (ID: {clientId})");
-                        
+
+                        OnPlayerLeave?.Invoke(players[i]);
                         players.RemoveAt(i);
                         NotifyPlayersUpdated();
                         break;
@@ -848,7 +852,7 @@ namespace Blanco.Networking
 
         #region Network Events
 
-                private void AddPlayerDirectly(ulong clientId, string playerName, bool isHost)
+        private void AddPlayerDirectly(ulong clientId, string playerName, bool isHost)
         {
             if (!NetworkManager.Singleton.IsServer) return;
             
@@ -868,7 +872,8 @@ namespace Blanco.Networking
             };
             
             players.Add(playerInfo);
-            
+            OnPlayerJoin?.Invoke(playerInfo);
+
             if (showDebugLogs)
                 Debug.Log($"➕ Jugador agregado con nombre temporal: {playerName} (ID: {clientId}, Host: {isHost})");
             
@@ -1294,6 +1299,18 @@ namespace Blanco.Networking
         public bool IsHostPlayer()
         {
             return NetworkManager.Singleton.IsHost;
+        }
+        
+        public PlayerInfo? GetPlayerInfo(ulong clientId)
+        {
+            foreach (var player in players)
+            {
+                if (player.clientId == clientId)
+                {
+                    return player;
+                }
+            }
+            return null;
         }
         
         private void NotifyPlayersUpdated()
