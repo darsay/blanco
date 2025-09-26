@@ -39,7 +39,7 @@ namespace Blanco.Networking
         /// <param name="exceptClientId">ClientId del jugador que NO será silenciado</param>
         public void MuteAllExcept(ulong exceptClientId)
         {
-            if (!IsHost)
+            if (!NetworkManager.Singleton.IsHost)
             {
                 Debug.LogWarning("⚠️ Solo el host puede silenciar jugadores");
                 return;
@@ -58,7 +58,7 @@ namespace Blanco.Networking
         /// </summary>
         public void MuteAll()
         {
-            if (!IsHost)
+            if (!NetworkManager.Singleton.IsHost)
             {
                 Debug.LogWarning("⚠️ Solo el host puede silenciar jugadores");
                 return;
@@ -77,7 +77,7 @@ namespace Blanco.Networking
         /// </summary>
         public void UnmuteAll()
         {
-            if (!IsHost)
+            if (!NetworkManager.Singleton.IsHost)
             {
                 Debug.LogWarning("⚠️ Solo el host puede desilenciar jugadores");
                 return;
