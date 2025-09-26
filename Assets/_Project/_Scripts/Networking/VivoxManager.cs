@@ -17,19 +17,6 @@ namespace Blanco.Networking
         private HashSet<string> mutedPlayers = new HashSet<string>();
         private bool allMuted = false;
         
-        private void Awake()
-        {
-            // Singleton pattern
-            if (Instance != null && Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-            
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
-        
         #region Public Methods (Solo Host)
         
         /// <summary>
