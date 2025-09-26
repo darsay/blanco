@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using UnityEngine.SceneManagement;
 using Unity.Collections;
 using static Blanco.Networking.LobbyManager;
+using MoreMountains.Tools;
 
 namespace Blanco.Networking
 {
@@ -744,10 +745,15 @@ namespace Blanco.Networking
                     loginOptions.DisplayName = $"Player_{AuthenticationService.Instance.PlayerId}";
                     await VivoxService.Instance.LoginAsync(loginOptions);
                 }
-                
+
+                var props3D = new Channel3DProperties();
+
                 // Unirse al canal usando las APIs v16
-                await VivoxService.Instance.JoinGroupChannelAsync(lobbyCode, ChatCapability.AudioOnly);
-                
+                await VivoxService.Instance.JoinPositionalChannelAsync(
+                    lobbyCode,
+                    ChatCapability.AudioOnly,
+                    props3D);
+
                 if (showDebugLogs)
                     Debug.Log($"✅ Conectado al canal de voz: {lobbyCode}");
             }
@@ -756,7 +762,7 @@ namespace Blanco.Networking
                 Debug.LogError($"❌ Error al unirse al canal de voz: {e.Message}");
             }
         }
-        
+
         private async Task LeaveLobbyVoiceChannel()
         {
             try
