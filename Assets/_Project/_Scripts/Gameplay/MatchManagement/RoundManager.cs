@@ -4,12 +4,14 @@ using System.Linq;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using Blanco.Networking;
 
 public class RoundManager : NetworkBehaviour
 {
     public static RoundManager Instance;
 
     public WordListSO wordList;
+    public VivoxManager vivoxManager;
 
     public enum RoundState : byte { Inactive, ShowingCards, SayWord, Talking, Voting, Result }
     public NetworkVariable<RoundState> currentState = new NetworkVariable<RoundState>(RoundState.Inactive, writePerm: NetworkVariableWritePermission.Server);
@@ -70,6 +72,7 @@ public class RoundManager : NetworkBehaviour
             if (player != null)
             {
                 UIGameplayManager.Instance.SetInfoTextClientRpc($"Player {client.ClientId}'s is speaking!");
+                vivoxManager.MuteAllExcept(player.OwnerClientId);
                 UIGameplayManager.Instance.StartGameTimer(5f);
                 yield return new WaitForSeconds(5f);
                 UIGameplayManager.Instance.HideInfoTextClientRpc();
@@ -82,6 +85,7 @@ public class RoundManager : NetworkBehaviour
 
     IEnumerator TalkingCoroutine()
     {
+        vivoxManager.UnmuteAll();
         currentState.Value = RoundState.Talking;
         UIGameplayManager.Instance.StartGameTimer(10f);
         yield return new WaitForSeconds(10f);
