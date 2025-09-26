@@ -38,6 +38,12 @@ public class UIGameplayManager : NetworkBehaviour
     private Blanco.Networking.LobbyManager lobbyManager;
     private float lastUpdateTime;
 
+    void Awake()
+    {
+        Instance = this;
+        infoText.gameObject.SetActive(false);
+    }
+
     private void Start()
     {
         // Usar el singleton LobbyManager
@@ -71,7 +77,7 @@ public class UIGameplayManager : NetworkBehaviour
         UpdateUI();
     }
 
-    private void OnDestroy()
+    private void OnDisable()
     {
         if (lobbyManager != null)
         {
@@ -220,12 +226,6 @@ public class UIGameplayManager : NetworkBehaviour
     {
         Debug.Log($"🔄 Estado del lobby cambiado: {newState}");
         UpdateUI();
-    }
-
-    void Awake()
-    {
-        Instance = this;
-        infoText.gameObject.SetActive(false);
     }
 
     [ClientRpc]

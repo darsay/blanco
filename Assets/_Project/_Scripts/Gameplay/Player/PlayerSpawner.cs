@@ -31,38 +31,28 @@ public class PlayerSpawner : NetworkBehaviour
             return;
         }
 
-        // Suscribirse a eventos
-        lobbyManager.OnPlayerJoin += SpawnPlayer;
-        Debug.Log("✅ PlayerSpawner suscrito a OnPlayerJoin");
-    }
-
-    private void Update()
-    {
-        // Si lobbyManager es null, intentar obtenerlo
-        if (lobbyManager == null)
+        if (NetworkManager.Singleton.IsHost)
         {
-            lobbyManager = Blanco.Networking.LobbyManager.Instance;
-            if (lobbyManager != null)
-            {
-                lobbyManager.OnPlayerJoin += SpawnPlayer;
-                Debug.Log("✅ PlayerSpawner suscrito a OnPlayerJoin (desde Update)");
-            }
+            SpawnPlayer(0);
+            NetworkManager.Singleton.OnClientConnectedCallback += SpawnPlayer;
+            Debug.Log("✅ PlayerSpawner suscrito a OnClientConnectedCallback");
         }
     }
 
-    private void OnDestroy()
+    private void OnDisable()
     {
-        if (lobbyManager != null)
+        if (NetworkManager.Singleton.IsHost)
         {
-            lobbyManager.OnPlayerJoin -= SpawnPlayer;
+            NetworkManager.Singleton.OnClientConnectedCallback -= SpawnPlayer;
         }
     }
 
-    public void SpawnPlayer(PlayerInfo player)
+    public void SpawnPlayer(ulong networkId)
     {
+        PlayerInfo player = lobbyManager.GetPlayerInfo(networkId);
         Debug.Log($"🎯 SpawnPlayer llamado para {player.playerName} (clientId: {player.clientId})");
-        
-        if (!IsServer)
+
+        if (!NetworkManager.Singleton.IsHost)
         {
             Debug.LogWarning("⚠️ SpawnPlayer llamado pero no es servidor");
             return;
@@ -98,11 +88,6 @@ public class PlayerSpawner : NetworkBehaviour
         netObj.SpawnAsPlayerObject(player.clientId);
         
         Debug.Log($"✅ Player spawnado exitosamente para {player.playerName}");
-    }
-
-    public void DespawnPlayer(PlayerInfo player)
-    {
-
     }
 
     private Transform GetNextSpawnPoint()

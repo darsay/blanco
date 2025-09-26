@@ -1,11 +1,13 @@
 using UnityEngine;
+using Unity.Netcode;
 using UnityEngine.UI;
 using TMPro;
 using System.Threading.Tasks;
+using Blanco.Networking;
 
 namespace Blanco.UI
 {
-    public class MenuUI : MonoBehaviour
+    public class MenuUI : NetworkBehaviour
     {
         [Header("UI Panels")]
         [SerializeField] private GameObject mainPanel;
@@ -191,7 +193,7 @@ namespace Blanco.UI
                 if (success)
                 {
                     // Cambiar a escena de lobby directamente
-                    UnityEngine.SceneManagement.SceneManager.LoadScene("GameplayTest");
+                    NetworkManager.SceneManager.LoadScene("GameplayTest", UnityEngine.SceneManagement.LoadSceneMode.Single);
                 }
                 else
                 {

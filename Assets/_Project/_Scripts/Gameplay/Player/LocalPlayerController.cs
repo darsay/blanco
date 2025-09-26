@@ -37,7 +37,7 @@ public class LocalPlayerController : NetworkBehaviour
     {
         if (!IsOwner) return;
 
-        if(IsServer && MatchManager.Instance.currentState.Value == MatchManager.MatchState.WaitingForPlayers)
+        if(NetworkManager.Singleton.IsHost && MatchManager.Instance.currentState.Value == MatchManager.MatchState.WaitingForPlayers)
         {
             HandleBeginingMatch();
         }

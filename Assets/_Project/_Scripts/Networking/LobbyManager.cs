@@ -1301,7 +1301,7 @@ namespace Blanco.Networking
             return NetworkManager.Singleton.IsHost;
         }
         
-        public PlayerInfo? GetPlayerInfo(ulong clientId)
+        public PlayerInfo GetPlayerInfo(ulong clientId)
         {
             foreach (var player in players)
             {
@@ -1310,7 +1310,12 @@ namespace Blanco.Networking
                     return player;
                 }
             }
-            return null;
+            throw new InvalidOperationException($"No se encontró un player con clientId {clientId}.");
+        }
+
+        public PlayerInfo GetCurrentPlayerInfo() 
+        {
+            return GetPlayerInfo(NetworkManager.Singleton.LocalClientId);
         }
         
         private void NotifyPlayersUpdated()

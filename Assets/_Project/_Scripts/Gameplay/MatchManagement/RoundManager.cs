@@ -23,13 +23,13 @@ public class RoundManager : NetworkBehaviour
 
     public void StartGame()
     {
-        if (!IsServer) return;
+        if (!NetworkManager.Singleton.IsHost) return;
         StartRound();
     }
 
     public void StartRound()
     {
-        if (!IsServer) return;
+        if (!NetworkManager.Singleton.IsHost) return;
         SetRandomWord();
         PickBlancoPlayer();
         SetCardsValues();
