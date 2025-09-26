@@ -159,9 +159,9 @@ public class LocalPlayerController : NetworkBehaviour
         yield return null;
 
         // ✅ Intenta detectar si YA estás en el canal posicional (variantes por SDK)
-        if (IsChannelAlreadyConnected(LobbyManager.CurrentLobby.Id))
+        if (IsChannelAlreadyConnected(LobbyManager.CurrentLobby.LobbyCode))
         {
-            _positionalChannelName = LobbyManager.CurrentLobby.Id;
+            _positionalChannelName = LobbyManager.CurrentLobby.LobbyCode;
             _positionalReady = true;
         }
     }
@@ -189,7 +189,7 @@ public class LocalPlayerController : NetworkBehaviour
 
     void OnChannelJoined(string channelName)
     {
-        if (channelName == LobbyManager.CurrentLobby.Id)
+        if (channelName == LobbyManager.CurrentLobby.LobbyCode)
         {
             _positionalChannelName = channelName;
             _positionalReady = true;
