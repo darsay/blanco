@@ -1,5 +1,3 @@
-using System;
-using TMPro;
 using Unity.Cinemachine;
 using Unity.Collections;
 using Unity.Netcode;
@@ -11,22 +9,24 @@ public class PlayerController : NetworkBehaviour
     public CinemachineCamera playerCamera;
 
     [Header("Card")]
-    [SerializeField] CardController owningCard;
-    [SerializeField] CardController nonOwningCard;
+    [SerializeField] private CardController owningCard;
+    [SerializeField] private CardController nonOwningCard;
 
     [Header("Player Prefabs")]
-    [SerializeField] GameObject owningPlayer;
-    [SerializeField] GameObject nonOwningPlayer;
+    [SerializeField] private GameObject owningPlayer;
+    [SerializeField] private GameObject nonOwningPlayer;
 
     [Header("Player Controllers")]
-    [SerializeField] LocalPlayerController localPlayerController;
+    [SerializeField] private LocalPlayerController localPlayerController;
+    [SerializeField] private RemotePlayerController remotePlayerController;
 
-    [SerializeField]
-    PlayerTag playerTag;
-
+    [SerializeField] private PlayerTag playerTag;
 
     public CardController Card;
-    
+
+    private bool isGhost;
+
+    public bool IsGhost => isGhost;
 
     void Start()
     {
@@ -35,28 +35,38 @@ public class PlayerController : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        base.OnNetworkSpawn();
+
         if (IsOwner)
         {
-            owningPlayer.SetActive(true);
-            nonOwningPlayer.SetActive(false);
-            playerCamera.enabled = true;
+            if (owningPlayer != null)
+                owningPlayer.SetActive(true);
+            if (nonOwningPlayer != null)
+                nonOwningPlayer.SetActive(false);
+            if (playerCamera != null)
+                playerCamera.enabled = true;
             Card = owningCard;
         }
         else
         {
-            owningPlayer.SetActive(false);
-            nonOwningPlayer.SetActive(true);
-            playerCamera.enabled = false;
+            if (owningPlayer != null)
+                owningPlayer.SetActive(false);
+            if (nonOwningPlayer != null)
+                nonOwningPlayer.SetActive(true);
+            if (playerCamera != null)
+                playerCamera.enabled = false;
             Card = nonOwningCard;
         }
 
         SetPlayerName($"Player {OwnerClientId}");
+        ApplyGhostState(false);
     }
 
     [ClientRpc]
     public void SetCardValuesClientRpc(FixedString32Bytes word, ulong blancoId)
     {
-        if(!IsOwner) return;
+        if (!IsOwner)
+            return;
 
         if (OwnerClientId == blancoId)
         {
@@ -70,7 +80,7 @@ public class PlayerController : NetworkBehaviour
 
     public void SetPlayerName(string name)
     {
-        playerTag.SetName(name);
+        playerTag?.SetName(name);
     }
 
     [ClientRpc]
@@ -78,7 +88,7 @@ public class PlayerController : NetworkBehaviour
     {
         if (IsOwner)
         {
-            localPlayerController.SeeCard(show);
+            localPlayerController?.SeeCard(show);
         }
     }
 
@@ -87,7 +97,7 @@ public class PlayerController : NetworkBehaviour
     {
         if (IsOwner)
         {
-            localPlayerController.Point(active);
+            localPlayerController?.Point(active);
         }
     }
 
@@ -96,9 +106,51 @@ public class PlayerController : NetworkBehaviour
     {
         if (IsOwner)
         {
-            localPlayerController.Aim(active);
+            localPlayerController?.Aim(active);
         }
     }
 
+    public void SetGhostStateServer(bool ghost)
+    {
+        if (!NetworkManager.Singleton.IsHost)
+            return;
 
+        ApplyGhostState(ghost);
+        SetGhostStateClientRpc(ghost);
+    }
+
+    [ClientRpc]
+    void SetGhostStateClientRpc(bool ghost)
+    {
+        ApplyGhostState(ghost);
+    }
+
+    public void ResetGhostState()
+    {
+        SetGhostStateServer(false);
+    }
+
+    private void ApplyGhostState(bool ghost)
+    {
+        isGhost = ghost;
+
+        if (playerTag != null)
+        {
+            playerTag.gameObject.SetActive(!ghost);
+        }
+
+        if (!IsOwner && nonOwningPlayer != null)
+        {
+            nonOwningPlayer.SetActive(!ghost);
+        }
+
+        if (IsOwner)
+        {
+            localPlayerController?.SetGhostState(ghost);
+        }
+        else
+        {
+            remotePlayerController?.SetGhostState(ghost);
+        }
+    }
 }

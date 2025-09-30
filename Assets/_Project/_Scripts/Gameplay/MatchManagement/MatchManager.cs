@@ -1,7 +1,5 @@
 using System.Collections.Generic;
-using Unity.Collections;
 using Unity.Netcode;
-using UnityEditor.PackageManager;
 using UnityEngine;
 
 public class MatchManager : NetworkBehaviour
@@ -10,8 +8,8 @@ public class MatchManager : NetworkBehaviour
 
     public enum MatchState : byte { WaitingForPlayers, Playing, Result }
 
-    public NetworkVariable<MatchState> currentState = new NetworkVariable<MatchState>(MatchState.WaitingForPlayers, writePerm:NetworkVariableWritePermission.Server);
-    private Dictionary<ulong, int> playersAndScores = new();
+    public NetworkVariable<MatchState> currentState = new NetworkVariable<MatchState>(MatchState.WaitingForPlayers, writePerm: NetworkVariableWritePermission.Server);
+    private readonly Dictionary<ulong, int> playersAndScores = new();
 
     void Awake()
     {
@@ -20,7 +18,7 @@ public class MatchManager : NetworkBehaviour
 
     private void Start()
     {
-        if(!NetworkManager.Singleton.IsHost) return;
+        if (!NetworkManager.Singleton.IsHost) return;
         playersAndScores[0] = 0;
         NetworkManager.OnClientConnectedCallback += OnClientConnected;
     }
@@ -31,28 +29,47 @@ public class MatchManager : NetworkBehaviour
         NetworkManager.OnClientConnectedCallback -= OnClientConnected;
     }
 
-
     private void OnClientConnected(ulong clientId)
     {
-        if(!NetworkManager.Singleton.IsHost) return;
+        if (!NetworkManager.Singleton.IsHost) return;
 
         playersAndScores[clientId] = 0;
     }
 
     public void OnBeginMatch()
     {
-        if(!NetworkManager.Singleton.IsHost) return;
-        if (currentState.Value == MatchState.WaitingForPlayers)
-        {
-            currentState.Value = MatchState.Playing;
-            RoundManager.Instance.StartGame();
-            OnBeginMatchClientRpc();
-        }
+        if (!NetworkManager.Singleton.IsHost) return;
+
+        if (currentState.Value == MatchState.Playing)
+            return;
+
+        currentState.Value = MatchState.Playing;
+        RoundManager.Instance?.StartGame();
+        OnBeginMatchClientRpc();
     }
 
     [ClientRpc]
     private void OnBeginMatchClientRpc()
     {
-        UIGameplayManager.Instance.waitingUI.SetActive(false);
+        if (UIGameplayManager.Instance != null && UIGameplayManager.Instance.waitingUI != null)
+        {
+            UIGameplayManager.Instance.waitingUI.SetActive(false);
+        }
+    }
+
+    public void ShowWaitingUI()
+    {
+        if (!NetworkManager.Singleton.IsHost) return;
+
+        ShowWaitingUIClientRpc();
+    }
+
+    [ClientRpc]
+    private void ShowWaitingUIClientRpc()
+    {
+        if (UIGameplayManager.Instance != null && UIGameplayManager.Instance.waitingUI != null)
+        {
+            UIGameplayManager.Instance.waitingUI.SetActive(true);
+        }
     }
 }

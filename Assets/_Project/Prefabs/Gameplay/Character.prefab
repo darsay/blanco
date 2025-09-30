@@ -1349,6 +1349,10 @@ MonoBehaviour:
     m_InternalValue: 0
   isPlayerAiming:
     m_InternalValue: 0
+  selectedVoteTarget:
+    m_InternalValue: 18446744073709551615
+  voteOutcome:
+    m_InternalValue: 0
   cameraRoot: {fileID: 422543480686528771}
 --- !u!1 &1169755428898188152
 GameObject:
@@ -1471,6 +1475,18 @@ MonoBehaviour:
   RightHandRig: {fileID: 2795629239833976722}
   LeftHandRig: {fileID: 7088299131531932296}
   revolver: {fileID: 271191530359129028}
+  rayHighlighter: {fileID: 0}
+  voteRayDistance: 100
+  voteLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  revolverAnimator: {fileID: 0}
+  successfulShotVfx: {fileID: 0}
+  jamVfx: {fileID: 0}
+  successfulShotAudio: {fileID: 0}
+  jamAudio: {fileID: 0}
+  shootTrigger: Shoot
+  jamTrigger: Jam
   sensitivity: 100
   minVerticalAngle: -45
   maxVerticalAngle: 45
@@ -8266,6 +8282,7 @@ MonoBehaviour:
   owningPlayer: {fileID: 1878486086504109387}
   nonOwningPlayer: {fileID: 4682628854040923846}
   localPlayerController: {fileID: 8701693209081867359}
+  remotePlayerController: {fileID: 7356822910147763979}
   playerTag: {fileID: 2389622494965236810}
   Card: {fileID: 0}
 --- !u!1 &6263763160637779300
@@ -8390,6 +8407,13 @@ MonoBehaviour:
   rightHandRig: {fileID: 8888107195424288268}
   cardHandRig: {fileID: 3441691011108632275}
   revolver: {fileID: 1157048536827542303}
+  revolverAnimator: {fileID: 0}
+  successfulShotVfx: {fileID: 0}
+  jamVfx: {fileID: 0}
+  successfulShotAudio: {fileID: 0}
+  jamAudio: {fileID: 0}
+  shootTrigger: Shoot
+  jamTrigger: Jam
 --- !u!1 &6365096126448067430
 GameObject:
   m_ObjectHideFlags: 0

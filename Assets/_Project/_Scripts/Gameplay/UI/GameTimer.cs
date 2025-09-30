@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using TMPro;
 using Unity.Netcode;
@@ -35,7 +35,7 @@ public class GameTimer : NetworkBehaviour
 
     public void SetVisibility(bool enabled)
     {
-        if (IsServer)
+        if (NetworkManager.Singleton.IsHost)
         {
             isActive.Value = enabled;
         }
@@ -44,14 +44,36 @@ public class GameTimer : NetworkBehaviour
     [ServerRpc]
     public void StartTimerServerRpc(float duration)
     {
-        remainingTime.Value = duration;
-        StartCoroutine(CountDownCoroutine());
+        StartTimerInternal(duration);
     }
 
     [ServerRpc]
     public void InterruptTimerServerRpc()
     {
+        StopTimerImmediate();
+    }
+
+    void StartTimerInternal(float duration)
+    {
+        if (!NetworkManager.Singleton.IsHost)
+            return;
+
+        StopAllCoroutines();
+        isInterrupted = false;
+        remainingTime.Value = duration;
+        SetVisibility(true);
+        StartCoroutine(CountDownCoroutine());
+    }
+
+    public void StopTimerImmediate()
+    {
+        if (!NetworkManager.Singleton.IsHost)
+            return;
+
         isInterrupted = true;
+        StopAllCoroutines();
+        remainingTime.Value = 0f;
+        SetVisibility(false);
     }
 
     IEnumerator CountDownCoroutine()

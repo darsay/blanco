@@ -143,7 +143,7 @@ namespace Blanco.Networking
                 Debug.Log("🌐 LobbyManager iniciado en red");
             
             // Configurar el estado inicial del lobby
-            if (NetworkManager.Singleton.IsServer)
+            if (NetworkManager.Singleton.IsHost)
             {
                 lobbyState.Value = LobbyState.Waiting;
                 
@@ -154,7 +154,7 @@ namespace Blanco.Networking
         
         private System.Collections.IEnumerator HostHeartbeat()
         {
-            while (CurrentLobby != null && NetworkManager.Singleton.IsServer)
+            while (CurrentLobby != null && NetworkManager.Singleton.IsHost)
             {
                 try
                 {
@@ -643,7 +643,7 @@ namespace Blanco.Networking
                 Debug.Log($"🔗 Cliente conectado: {clientId}");
             
             // Solo el servidor debe manejar los jugadores
-            if (NetworkManager.Singleton.IsServer)
+            if (NetworkManager.Singleton.IsHost)
             {
                 if (showDebugLogs)
                     Debug.Log($"🔍 Servidor añadiendo jugador con clientId: {clientId}");
@@ -675,7 +675,7 @@ namespace Blanco.Networking
                 Debug.Log($"🔌 Cliente desconectado: {clientId}");
             
             // Solo el servidor debe manejar los jugadores
-            if (NetworkManager.Singleton.IsServer)
+            if (NetworkManager.Singleton.IsHost)
             {
                 // Remover jugador de la lista
                 for (int i = 0; i < players.Count; i++)
@@ -795,7 +795,7 @@ namespace Blanco.Networking
             // Dictionary cleared - no longer needed
             
             // Solo limpiar la lista de jugadores si es el servidor
-            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && players != null)
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost && players != null)
             {
                 players.Clear();
             }
@@ -860,7 +860,7 @@ namespace Blanco.Networking
 
         private void AddPlayerDirectly(ulong clientId, string playerName, bool isHost)
         {
-            if (!NetworkManager.Singleton.IsServer) return;
+            if (!NetworkManager.Singleton.IsHost) return;
             
             // SIEMPRE usar el nombre temporal proporcionado inicialmente
             // NO intentar obtener el nombre de Unity Services aquí para evitar inconsistencias

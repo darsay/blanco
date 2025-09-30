@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class PlayerCollider : MonoBehaviour
 {
@@ -7,6 +7,14 @@ public class PlayerCollider : MonoBehaviour
 
     private int originalLayer;
     private bool isHighlighted = false;
+    private PlayerController ownerController;
+
+    public PlayerController OwnerController => ownerController;
+
+    private void Awake()
+    {
+        ownerController = GetComponentInParent<PlayerController>();
+    }
 
     public void Highlight(bool enable)
     {

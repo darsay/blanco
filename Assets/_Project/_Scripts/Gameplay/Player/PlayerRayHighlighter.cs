@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class PlayerRayHighlighter : MonoBehaviour
 {
@@ -6,6 +6,8 @@ public class PlayerRayHighlighter : MonoBehaviour
     [SerializeField] private Camera cam;
 
     private PlayerCollider lastTarget;
+
+    public PlayerCollider CurrentTarget => lastTarget;
 
     void Update()
     {
@@ -20,6 +22,12 @@ public class PlayerRayHighlighter : MonoBehaviour
 
             if (target != null)
             {
+                if (target.OwnerController != null && target.OwnerController.IsGhost)
+                {
+                    RestorePrevious();
+                    return;
+                }
+
                 if (target != lastTarget)
                 {
                     RestorePrevious();
@@ -34,6 +42,11 @@ public class PlayerRayHighlighter : MonoBehaviour
         RestorePrevious();
     }
 
+    private void OnDisable()
+    {
+        RestorePrevious();
+    }
+
     void RestorePrevious()
     {
         if (lastTarget != null)
@@ -41,5 +54,10 @@ public class PlayerRayHighlighter : MonoBehaviour
             lastTarget.Highlight(false);
             lastTarget = null;
         }
+    }
+
+    public void ClearCurrentTarget()
+    {
+        RestorePrevious();
     }
 }
