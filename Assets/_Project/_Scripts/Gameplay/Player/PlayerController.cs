@@ -3,6 +3,8 @@ using Unity.Cinemachine;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
 
 public class PlayerController : NetworkBehaviour
 {
@@ -26,6 +28,8 @@ public class PlayerController : NetworkBehaviour
     public CardController Card;
 
     private bool isGhost;
+    private bool subscribedToLobbyUpdates;
+    private Coroutine lobbySubscriptionCoroutine;
 
     public bool IsGhost => isGhost;
 
@@ -59,8 +63,15 @@ public class PlayerController : NetworkBehaviour
             Card = nonOwningCard;
         }
 
-        SetPlayerName(GetDisplayName(OwnerClientId));
+        UpdatePlayerNameFromLobby();
+        SubscribeToLobbyUpdates();
         ApplyGhostState(false);
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        UnsubscribeFromLobbyUpdates();
+        base.OnNetworkDespawn();
     }
 
     [ClientRpc]
@@ -76,6 +87,11 @@ public class PlayerController : NetworkBehaviour
     public void SetPlayerName(string name)
     {
         playerTag?.SetName(name);
+    }
+
+    void UpdatePlayerNameFromLobby()
+    {
+        SetPlayerName(GetDisplayName(OwnerClientId));
     }
 
     string GetDisplayName(ulong clientId)
@@ -97,6 +113,71 @@ public class PlayerController : NetworkBehaviour
         }
 
         return $"Jugador {clientId}";
+    }
+
+    void SubscribeToLobbyUpdates()
+    {
+        if (subscribedToLobbyUpdates)
+            return;
+
+        var lobby = LobbyManager.Instance;
+        if (lobby == null)
+        {
+            if (lobbySubscriptionCoroutine == null)
+            {
+                lobbySubscriptionCoroutine = StartCoroutine(WaitForLobbyManagerAndSubscribe());
+            }
+            return;
+        }
+
+        lobby.OnPlayersUpdated += HandleLobbyPlayersUpdated;
+        subscribedToLobbyUpdates = true;
+    }
+
+    void UnsubscribeFromLobbyUpdates()
+    {
+        if (lobbySubscriptionCoroutine != null)
+        {
+            StopCoroutine(lobbySubscriptionCoroutine);
+            lobbySubscriptionCoroutine = null;
+        }
+
+        if (!subscribedToLobbyUpdates)
+            return;
+
+        if (LobbyManager.Instance != null)
+        {
+            LobbyManager.Instance.OnPlayersUpdated -= HandleLobbyPlayersUpdated;
+        }
+
+        subscribedToLobbyUpdates = false;
+    }
+
+    IEnumerator WaitForLobbyManagerAndSubscribe()
+    {
+        // Reintenta la suscripcion cuando el LobbyManager aun no esta inicializado.
+        while (LobbyManager.Instance == null)
+        {
+            yield return null;
+        }
+
+        lobbySubscriptionCoroutine = null;
+        SubscribeToLobbyUpdates();
+    }
+
+    void HandleLobbyPlayersUpdated(List<LobbyManager.PlayerInfo> lobbyPlayers)
+    {
+        if (lobbyPlayers == null)
+            return;
+
+        foreach (var info in lobbyPlayers)
+        {
+            if (info.clientId == OwnerClientId)
+            {
+                SetPlayerName(info.playerName.ToString());
+                return;
+            }
+        }
     }
 
     [ClientRpc]

@@ -141,17 +141,29 @@ namespace Blanco.Networking
         {
             if (showDebugLogs)
                 Debug.Log("🌐 LobbyManager iniciado en red");
-            
+
+            players.OnListChanged += HandlePlayersListChanged;
+            if (!NetworkManager.Singleton.IsHost)
+            {
+                NotifyPlayersUpdated();
+            }
+
             // Configurar el estado inicial del lobby
             if (NetworkManager.Singleton.IsHost)
             {
                 lobbyState.Value = LobbyState.Waiting;
-                
+
                 // Heartbeat del host DESHABILITADO temporalmente para evitar rate limit
                 StartCoroutine(HostHeartbeat());
             }
         }
-        
+
+        public override void OnNetworkDespawn()
+        {
+            players.OnListChanged -= HandlePlayersListChanged;
+            base.OnNetworkDespawn();
+        }
+
         private System.Collections.IEnumerator HostHeartbeat()
         {
             while (CurrentLobby != null && NetworkManager.Singleton.IsHost)
@@ -1307,6 +1319,14 @@ namespace Blanco.Networking
             return NetworkManager.Singleton.IsHost;
         }
         
+        private void HandlePlayersListChanged(NetworkListEvent<PlayerInfo> change)
+        {
+            if (!NetworkManager.Singleton.IsHost)
+            {
+                NotifyPlayersUpdated();
+            }
+        }
+
         public PlayerInfo GetPlayerInfo(ulong clientId)
         {
             foreach (var player in players)
