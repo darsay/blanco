@@ -42,7 +42,7 @@ public class RoundManager : NetworkBehaviour
 
     public NetworkVariable<RoundState> currentState = new NetworkVariable<RoundState>(RoundState.Inactive, writePerm: NetworkVariableWritePermission.Server);
     public NetworkVariable<FixedString32Bytes> chosenWord = new NetworkVariable<FixedString32Bytes>(default, writePerm: NetworkVariableWritePermission.Server);
-    public NetworkVariable<ulong> blancoPlayerId = new NetworkVariable<ulong>(default, writePerm: NetworkVariableWritePermission.Server);
+    public NetworkVariable<ulong> blancoPlayerId = new NetworkVariable<ulong>(PlayerActionsSync.NoTarget, writePerm: NetworkVariableWritePermission.Server);
 
     private readonly Dictionary<ulong, ulong> playerVotes = new();
     public WinConditionType CurrentWinConditionType => winCondition;
@@ -50,6 +50,9 @@ public class RoundManager : NetworkBehaviour
 
 
     private readonly HashSet<ulong> eliminatedPlayers = new();
+    private readonly NetworkList<ulong> eliminatedPlayersSync = new();
+    private readonly HashSet<ulong> eliminatedPlayersCache = new();
+    private bool blancoAssignedThisMatch;
 
     private Coroutine roundFlowCoroutine;
     private int roundsCompleted;
@@ -63,15 +66,41 @@ public class RoundManager : NetworkBehaviour
 
     public bool IsGameOver => isGameOver;
     public bool IsAwaitingRestart => awaitingRestart;
+    public IReadOnlyList<ulong> EliminatedPlayers
+    {
+        get
+        {
+            var list = new List<ulong>();
+            foreach (var id in eliminatedPlayersSync)
+            {
+                list.Add(id);
+            }
+            return list;
+        }
+    }
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
 
+        eliminatedPlayersSync.OnListChanged += HandleEliminatedPlayersListChanged;
+
         if (NetworkManager.Singleton.IsHost)
         {
             BroadcastCurrentWinCondition();
         }
+        else
+        {
+            RebuildEliminatedPlayersCache();
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+
+        eliminatedPlayersSync.OnListChanged -= HandleEliminatedPlayersListChanged;
+        eliminatedPlayersCache.Clear();
     }
 
     void Awake()
@@ -106,11 +135,14 @@ public class RoundManager : NetworkBehaviour
     {
         roundsCompleted = 0;
         eliminatedPlayers.Clear();
+        eliminatedPlayersSync.Clear();
+        eliminatedPlayersCache.Clear();
         isGameOver = false;
         awaitingRestart = false;
         playerVotes.Clear();
         chosenWord.Value = default;
-        blancoPlayerId.Value = default;
+        blancoAssignedThisMatch = false;
+        blancoPlayerId.Value = PlayerActionsSync.NoTarget;
 
         if (NetworkManager.Singleton != null)
         {
@@ -172,9 +204,9 @@ public class RoundManager : NetworkBehaviour
             return false;
         }
 
-        if (!TryPickBlancoPlayer())
+        if (!TryAssignBlancoPlayer())
         {
-            Debug.LogWarning("[RoundManager] Failed to pick a Blanco player. Round cannot begin.");
+            Debug.LogWarning("[RoundManager] Failed to assign a Blanco player. Round cannot begin.");
             return false;
         }
 
@@ -194,7 +226,6 @@ public class RoundManager : NetworkBehaviour
         {
             UIGameplayManager.Instance.StopGameTimer();
             UIGameplayManager.Instance.HideInfoTextClientRpc();
-            UIGameplayManager.Instance.ClearVoteSelectionClientRpc();
         }
     }
 
@@ -276,7 +307,7 @@ public class RoundManager : NetworkBehaviour
 
     IEnumerator TalkingCoroutine()
     {
-        vivoxManager?.UnmuteAll();
+        vivoxManager?.UnmuteAllAlive();
         currentState.Value = RoundState.Talking;
         UIGameplayManager.Instance?.SetInfoTextClientRpc("Free discussion");
         UIGameplayManager.Instance?.StartGameTimer(talkingDuration);
@@ -309,7 +340,6 @@ public class RoundManager : NetworkBehaviour
             player?.AimClientRpc(true);
         }
 
-        UIGameplayManager.Instance?.ClearVoteSelectionClientRpc();
         UIGameplayManager.Instance?.SetInfoTextClientRpc("Aim and select your suspect");
         UIGameplayManager.Instance?.StartGameTimer(votingDuration);
 
@@ -334,9 +364,9 @@ public class RoundManager : NetworkBehaviour
             roundsCompleted++;
             playerVotes.Clear();
 
-            if (CheckVictoryConditions(out string reason))
+            if (CheckVictoryConditions(out string reason, out bool playersWinResult))
             {
-                TriggerVictory(reason);
+                TriggerVictory(reason, playersWinResult);
                 return;
             }
 
@@ -356,9 +386,9 @@ public class RoundManager : NetworkBehaviour
             roundsCompleted++;
             playerVotes.Clear();
 
-            if (CheckVictoryConditions(out string reason))
+            if (CheckVictoryConditions(out string reason, out bool playersWinResult))
             {
-                TriggerVictory(reason);
+                TriggerVictory(reason, playersWinResult);
                 return;
             }
 
@@ -376,9 +406,9 @@ public class RoundManager : NetworkBehaviour
             roundsCompleted++;
             playerVotes.Clear();
 
-            if (CheckVictoryConditions(out string reason))
+            if (CheckVictoryConditions(out string reason, out bool playersWinResult))
             {
-                TriggerVictory(reason);
+                TriggerVictory(reason, playersWinResult);
                 return;
             }
 
@@ -396,9 +426,9 @@ public class RoundManager : NetworkBehaviour
         roundsCompleted++;
         playerVotes.Clear();
 
-        if (CheckVictoryConditions(out string victoryReason))
+        if (CheckVictoryConditions(out string victoryReason, out bool playersWin))
         {
-            TriggerVictory(victoryReason);
+            TriggerVictory(victoryReason, playersWin);
             return;
         }
 
@@ -409,6 +439,11 @@ public class RoundManager : NetworkBehaviour
     {
         if (!eliminatedPlayers.Add(eliminatedId))
             return;
+
+        if (IsServer)
+        {
+            eliminatedPlayersSync.Add(eliminatedId);
+        }
 
         if (NetworkManager.Singleton == null)
             return;
@@ -423,6 +458,13 @@ public class RoundManager : NetworkBehaviour
                 player.ShowCardClientRpc(false);
                 player.SetGhostStateServer(true);
             }
+        }
+
+        // Check if the eliminated player was the Blanco
+        if (eliminatedId == blancoPlayerId.Value)
+        {
+            TriggerVictory("El Blanco ha sido eliminado!", true);
+            return;
         }
     }
 
@@ -487,26 +529,33 @@ public class RoundManager : NetworkBehaviour
         BeginRound();
     }
 
-    bool CheckVictoryConditions(out string reason)
+    bool CheckVictoryConditions(out string reason, out bool playersWin)
     {
         reason = null;
+        playersWin = false;
 
         switch (winCondition)
         {
             case WinConditionType.Rounds:
                 if (roundsCompleted >= Mathf.Max(1, roundsToWin))
                 {
-                    reason = $"Se completaron {roundsCompleted} rondas.";
+                    bool blancoAlive = IsBlancoAlive();
+                    reason = blancoAlive
+                        ? $"Se completaron {roundsCompleted} rondas y El Blanco sobrevivio."
+                        : $"Se completaron {roundsCompleted} rondas y El Blanco no sobrevivio.";
+                    playersWin = !blancoAlive;
                     return true;
                 }
                 break;
             case WinConditionType.RemainingPlayers:
                 int activePlayers = GetActivePlayersCount();
-                if (activePlayers <= Mathf.Max(1, remainingPlayersToWin))
+                if (activePlayers <= Mathf.Max(2, remainingPlayersToWin))
                 {
-                    reason = activePlayers == 1
-                        ? "Solo queda un jugador activo en la mesa."
+                    bool blancoAlive = IsBlancoAlive();
+                    reason = activePlayers == 2
+                        ? "Solo quedan dos jugadores activos en la mesa."
                         : $"Solo quedan {activePlayers} jugadores activos.";
+                    playersWin = !blancoAlive;
                     return true;
                 }
                 break;
@@ -536,7 +585,7 @@ public class RoundManager : NetworkBehaviour
         vivoxManager?.UnmuteAll();
         UIGameplayManager.Instance?.StopGameTimer();
 
-        string header = playersWin ? "Players win!" : "The Blanco wins!";
+        string header = playersWin ? "Los jugadores ganan!" : "El Blanco gana!";
         if (UIGameplayManager.Instance != null)
         {
             string composedMessage = header;
@@ -545,7 +594,7 @@ public class RoundManager : NetworkBehaviour
                 composedMessage += $"\n{reason}";
             }
 
-            composedMessage += "\n\nHost: press SPACE to start a new match.";
+            composedMessage += "\n\nHost: presiona ESPACIO para comenzar una nueva partida.";
             UIGameplayManager.Instance.SetInfoTextClientRpc(composedMessage);
         }
 
@@ -556,9 +605,48 @@ public class RoundManager : NetworkBehaviour
         }
 
         ValidateVictoryFeedback();
-        PlayVictoryFeedback(playersWin);
+        PlayVictoryFeedback();
+    }
 
-        ResetVotingStateClientRpc();
+    bool IsBlancoAlive()
+    {
+        if (!blancoAssignedThisMatch || blancoPlayerId.Value == PlayerActionsSync.NoTarget)
+            return false;
+
+        if (IsPlayerEliminated(blancoPlayerId.Value))
+            return false;
+
+        if (NetworkManager.Singleton == null)
+            return false;
+
+        return NetworkManager.Singleton.ConnectedClients.ContainsKey(blancoPlayerId.Value);
+    }
+
+    void HandleEliminatedPlayersListChanged(NetworkListEvent<ulong> change)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost)
+            return;
+
+        RebuildEliminatedPlayersCache();
+    }
+
+    void RebuildEliminatedPlayersCache()
+    {
+        eliminatedPlayersCache.Clear();
+        foreach (var id in eliminatedPlayersSync)
+        {
+            eliminatedPlayersCache.Add(id);
+        }
+    }
+
+    public bool IsPlayerEliminated(ulong clientId)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost)
+        {
+            return eliminatedPlayers.Contains(clientId);
+        }
+
+        return eliminatedPlayersCache.Contains(clientId);
     }
 
     void ValidateVictoryFeedback()
@@ -634,8 +722,13 @@ public class RoundManager : NetworkBehaviour
         }
     }
 
-    bool TryPickBlancoPlayer()
+    bool TryAssignBlancoPlayer()
     {
+        if (blancoAssignedThisMatch && blancoPlayerId.Value != PlayerActionsSync.NoTarget)
+        {
+            return true;
+        }
+
         var availableClients = GetActiveClients().ToList();
         if (availableClients.Count == 0)
         {
@@ -645,6 +738,7 @@ public class RoundManager : NetworkBehaviour
 
         var selectedClient = availableClients[UnityEngine.Random.Range(0, availableClients.Count)];
         blancoPlayerId.Value = selectedClient.ClientId;
+        blancoAssignedThisMatch = true;
         Debug.Log($"Blanco player chosen: {blancoPlayerId.Value}");
         return true;
     }
@@ -775,8 +869,6 @@ public class RoundManager : NetworkBehaviour
 
         var sync = playerObject.GetComponent<PlayerActionsSync>() ?? playerObject.GetComponentInChildren<PlayerActionsSync>();
         sync?.ResetVotingState();
-
-        UIGameplayManager.Instance?.SetLocalVoteSelection("Sin objetivo seleccionado");
     }
 }
 

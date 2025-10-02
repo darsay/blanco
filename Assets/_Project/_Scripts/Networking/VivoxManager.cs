@@ -77,28 +77,42 @@ namespace Blanco.Networking
             UnmuteAllClientRpc();
         }
         
+        public void UnmuteAllAlive()
+        {
+            if (!NetworkManager.Singleton.IsHost)
+            {
+                Debug.LogWarning("⚠️ Solo el host puede desilenciar jugadores");
+                return;
+            }
+            
+            if (showDebugLogs)
+                Debug.Log($"🔊 Host desilenciando a todos los jugadores");
+            
+            // Enviar RPC a todos los clientes
+            UnmuteAllAliveClientRpc();
+        }
+        
         #endregion
-        
+
         #region Client RPCs
-        
+
         [ClientRpc]
         private void MuteAllExceptClientRpc(ulong exceptClientId)
         {
             if (showDebugLogs)
-                Debug.Log($"🔇 Recibido: Silenciar todos excepto cliente {exceptClientId}");
-            
-            // Si soy el cliente exceptuado, me desilenció (en caso de que estuviera silenciado)
-            if (NetworkManager.Singleton.LocalClientId == exceptClientId)
+                Debug.Log($"?? Recibido: Silenciar todos excepto cliente {exceptClientId}");
+
+            bool keepMuted = ShouldKeepLocalPlayerMuted();
+
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClientId == exceptClientId && !keepMuted)
             {
                 if (showDebugLogs)
-                    Debug.Log($"✅ Soy el cliente exceptuado ({exceptClientId}), me desilenció automáticamente");
-                
-                // Desilenciar para asegurar que puedo hablar
+                    Debug.Log($"? Soy el cliente exceptuado ({exceptClientId}), me desilencio automaticamente");
+
                 UnmuteLocalMicrophone();
                 return;
             }
-            
-            // Silenciar localmente mi micrófono
+
             MuteLocalMicrophone();
         }
         
@@ -116,16 +130,30 @@ namespace Blanco.Networking
         private void UnmuteAllClientRpc()
         {
             if (showDebugLogs)
-                Debug.Log($"🔊 Recibido: Desilenciar a todos");
-            
-            // Desilenciar localmente mi micrófono
+                Debug.Log($"?? Recibido: Desilenciar a todos");
+
+            UnmuteLocalMicrophone();
+        }
+        
+        [ClientRpc]
+        private void UnmuteAllAliveClientRpc()
+        {
+            if (showDebugLogs)
+                Debug.Log($"?? Recibido: Desilenciar a todos");
+
+            if (ShouldKeepLocalPlayerMuted())
+            {
+                MuteLocalMicrophone();
+                return;
+            }
+
             UnmuteLocalMicrophone();
         }
         
         #endregion
-        
+
         #region Local Audio Control
-        
+
         /// <summary>
         /// Silencia localmente el micrófono del cliente
         /// </summary>
@@ -137,7 +165,7 @@ namespace Blanco.Networking
                 {
                     VivoxService.Instance.MuteInputDevice();
                     allMuted = true;
-                    
+
                     if (showDebugLogs)
                         Debug.Log($"🔇 Micrófono local silenciado");
                 }
@@ -185,6 +213,14 @@ namespace Blanco.Networking
         
         #region Utility Methods
         
+        private bool ShouldKeepLocalPlayerMuted()
+        {
+            if (RoundManager.Instance == null || NetworkManager.Singleton == null)
+                return false;
+
+            return RoundManager.Instance.IsPlayerEliminated(NetworkManager.Singleton.LocalClientId);
+        }
+
         /// <summary>
         /// Verifica si el micrófono local está silenciado
         /// </summary>

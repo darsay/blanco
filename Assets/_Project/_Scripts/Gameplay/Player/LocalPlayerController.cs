@@ -299,7 +299,7 @@ public class LocalPlayerController : NetworkBehaviour
 
         if (ghost)
         {
-            UIGameplayManager.Instance?.SetLocalVoteSelection("No target selected");
+            UIGameplayManager.Instance?.SetLocalVoteSelection("You can't vote");
             if (VivoxService.Instance != null)
             {
                 VivoxService.Instance.MuteInputDevice();

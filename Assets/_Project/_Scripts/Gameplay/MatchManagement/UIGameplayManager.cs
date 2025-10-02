@@ -88,7 +88,6 @@ public class UIGameplayManager : NetworkBehaviour
 
         // Configurar UI inicial
         UpdateUI();
-        SetLocalVoteSelection("No target selected");
         InitializeWinConditionUI();
     }
 
@@ -268,12 +267,6 @@ public class UIGameplayManager : NetworkBehaviour
     {
         if (infoText == null) return;
         infoText.gameObject.SetActive(false);
-    }
-
-    [ClientRpc]
-    public void ClearVoteSelectionClientRpc()
-    {
-        SetLocalVoteSelection("No target selected");
     }
 
     public void SetLocalVoteSelection(string text)
