@@ -1,3 +1,4 @@
+using Blanco.Networking;
 using Unity.Cinemachine;
 using Unity.Collections;
 using Unity.Netcode;
@@ -58,29 +59,44 @@ public class PlayerController : NetworkBehaviour
             Card = nonOwningCard;
         }
 
-        SetPlayerName($"Player {OwnerClientId}");
+        SetPlayerName(GetDisplayName(OwnerClientId));
         ApplyGhostState(false);
     }
 
     [ClientRpc]
-    public void SetCardValuesClientRpc(FixedString32Bytes word, ulong blancoId)
+    public void SetCardValuesClientRpc(FixedString32Bytes word, bool isBlanco)
     {
         if (!IsOwner)
             return;
 
-        if (OwnerClientId == blancoId)
-        {
-            Card.SetWord("Blanco");
-        }
-        else
-        {
-            Card.SetWord(word.ToString());
-        }
+        // Actualiza la carta local segun si el jugador ocupa el rol de Blanco.
+        Card.SetWord(isBlanco ? "Blanco" : word.ToString());
     }
 
     public void SetPlayerName(string name)
     {
         playerTag?.SetName(name);
+    }
+
+    string GetDisplayName(ulong clientId)
+    {
+        if (LobbyManager.Instance != null)
+        {
+            try
+            {
+                var playerInfo = LobbyManager.Instance.GetPlayerInfo(clientId);
+                if (!playerInfo.playerName.IsEmpty)
+                {
+                    return playerInfo.playerName.ToString();
+                }
+            }
+            catch
+            {
+                // Ignorar lookup fallido
+            }
+        }
+
+        return $"Jugador {clientId}";
     }
 
     [ClientRpc]

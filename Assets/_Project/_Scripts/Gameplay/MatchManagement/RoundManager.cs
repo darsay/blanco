@@ -24,6 +24,7 @@ public class RoundManager : NetworkBehaviour
     [SerializeField] private float votingDuration = 30f;
     [SerializeField] private float resultDelay = 5f;
     [SerializeField] private float tieDelay = 4f;
+    [SerializeField] private float eliminationDuration = 4f;
 
     public enum RoundState : byte { Inactive, ShowingCards, SayWord, Talking, Voting, Result }
     public enum WinConditionType { Rounds, RemainingPlayers }
@@ -32,6 +33,9 @@ public class RoundManager : NetworkBehaviour
     [SerializeField] private WinConditionType winCondition = WinConditionType.Rounds;
     [SerializeField, Min(1)] private int roundsToWin = 5;
     [SerializeField, Min(1)] private int remainingPlayersToWin = 2;
+
+    [Header("Blanco Settings")]
+    [SerializeField, Min(1)] private int blancosPerMatch = 1;
 
     [Header("Victory Feedback")]
     [SerializeField] private string victoryMessage = "El Blanco ha ganado la partida!";
@@ -42,17 +46,20 @@ public class RoundManager : NetworkBehaviour
 
     public NetworkVariable<RoundState> currentState = new NetworkVariable<RoundState>(RoundState.Inactive, writePerm: NetworkVariableWritePermission.Server);
     public NetworkVariable<FixedString32Bytes> chosenWord = new NetworkVariable<FixedString32Bytes>(default, writePerm: NetworkVariableWritePermission.Server);
-    public NetworkVariable<ulong> blancoPlayerId = new NetworkVariable<ulong>(PlayerActionsSync.NoTarget, writePerm: NetworkVariableWritePermission.Server);
+    public NetworkList<ulong> blancoPlayerIds = new();
+    private readonly HashSet<ulong> blancoPlayersCache = new();
+    private bool hasShownCardsThisMatch;
 
     private readonly Dictionary<ulong, ulong> playerVotes = new();
     public WinConditionType CurrentWinConditionType => winCondition;
     public int CurrentWinConditionThreshold => winCondition == WinConditionType.Rounds ? roundsToWin : remainingPlayersToWin;
+    public int BlancosPerMatch => Mathf.Max(1, blancosPerMatch);
 
 
     private readonly HashSet<ulong> eliminatedPlayers = new();
     private readonly NetworkList<ulong> eliminatedPlayersSync = new();
     private readonly HashSet<ulong> eliminatedPlayersCache = new();
-    private bool blancoAssignedThisMatch;
+    private bool blancosAssignedThisMatch;
 
     private Coroutine roundFlowCoroutine;
     private int roundsCompleted;
@@ -70,11 +77,19 @@ public class RoundManager : NetworkBehaviour
     {
         get
         {
-            var list = new List<ulong>();
+            var list = new List<ulong>(eliminatedPlayersSync.Count);
             foreach (var id in eliminatedPlayersSync)
-            {
                 list.Add(id);
-            }
+            return list;
+        }
+    }
+    public IReadOnlyList<ulong> BlancoPlayers
+    {
+        get
+        {
+            var list = new List<ulong>(blancoPlayerIds.Count);
+            foreach (var id in blancoPlayerIds)
+                list.Add(id);
             return list;
         }
     }
@@ -83,7 +98,9 @@ public class RoundManager : NetworkBehaviour
     {
         base.OnNetworkSpawn();
 
+        // Mantener sincronizada la lista de eliminados y blancos en todos los clientes.
         eliminatedPlayersSync.OnListChanged += HandleEliminatedPlayersListChanged;
+        blancoPlayerIds.OnListChanged += HandleBlancoPlayersListChanged;
 
         if (NetworkManager.Singleton.IsHost)
         {
@@ -92,6 +109,7 @@ public class RoundManager : NetworkBehaviour
         else
         {
             RebuildEliminatedPlayersCache();
+            RebuildBlancoPlayersCache();
         }
     }
 
@@ -100,7 +118,10 @@ public class RoundManager : NetworkBehaviour
         base.OnNetworkDespawn();
 
         eliminatedPlayersSync.OnListChanged -= HandleEliminatedPlayersListChanged;
+        blancoPlayerIds.OnListChanged -= HandleBlancoPlayersListChanged;
+
         eliminatedPlayersCache.Clear();
+        blancoPlayersCache.Clear();
     }
 
     void Awake()
@@ -137,12 +158,14 @@ public class RoundManager : NetworkBehaviour
         eliminatedPlayers.Clear();
         eliminatedPlayersSync.Clear();
         eliminatedPlayersCache.Clear();
+        blancoPlayerIds.Clear();
+        blancoPlayersCache.Clear();
+        blancosAssignedThisMatch = false;
+        hasShownCardsThisMatch = false;
         isGameOver = false;
         awaitingRestart = false;
         playerVotes.Clear();
         chosenWord.Value = default;
-        blancoAssignedThisMatch = false;
-        blancoPlayerId.Value = PlayerActionsSync.NoTarget;
 
         if (NetworkManager.Singleton != null)
         {
@@ -170,6 +193,14 @@ public class RoundManager : NetworkBehaviour
             return;
         }
 
+        if (hasShownCardsThisMatch)
+        {
+            // En rondas posteriores omitimos la animacion de cartas.
+            roundFlowCoroutine = StartCoroutine(SayWordCoroutine());
+            return;
+        }
+
+        hasShownCardsThisMatch = true;
         currentState.Value = RoundState.ShowingCards;
         roundFlowCoroutine = StartCoroutine(ShowCardsCoroutine());
     }
@@ -204,7 +235,7 @@ public class RoundManager : NetworkBehaviour
             return false;
         }
 
-        if (!TryAssignBlancoPlayer())
+        if (!TryAssignBlancoPlayers())
         {
             Debug.LogWarning("[RoundManager] Failed to assign a Blanco player. Round cannot begin.");
             return false;
@@ -346,13 +377,13 @@ public class RoundManager : NetworkBehaviour
         yield return new WaitForSeconds(votingDuration);
 
         UIGameplayManager.Instance?.StopGameTimer();
-        ResolveVotingPhase();
+        StartCoroutine(ResolveVotingPhase());
     }
 
-    void ResolveVotingPhase()
+    IEnumerator ResolveVotingPhase()
     {
         if (!NetworkManager.Singleton.IsHost)
-            return;
+            yield break;
 
         currentState.Value = RoundState.Result;
         UIGameplayManager.Instance?.HideInfoTextClientRpc();
@@ -367,11 +398,11 @@ public class RoundManager : NetworkBehaviour
             if (CheckVictoryConditions(out string reason, out bool playersWinResult))
             {
                 TriggerVictory(reason, playersWinResult);
-                return;
+                yield break;
             }
 
             roundFlowCoroutine = StartCoroutine(BeginNextRoundAfterDelay(tieDelay));
-            return;
+            yield break;
         }
 
         var validVotes = playerVotes
@@ -389,11 +420,11 @@ public class RoundManager : NetworkBehaviour
             if (CheckVictoryConditions(out string reason, out bool playersWinResult))
             {
                 TriggerVictory(reason, playersWinResult);
-                return;
+                yield break;
             }
 
             roundFlowCoroutine = StartCoroutine(BeginNextRoundAfterDelay(tieDelay));
-            return;
+            yield break;
         }
 
         int maxVotes = validVotes.Max(v => v.Count);
@@ -409,19 +440,22 @@ public class RoundManager : NetworkBehaviour
             if (CheckVictoryConditions(out string reason, out bool playersWinResult))
             {
                 TriggerVictory(reason, playersWinResult);
-                return;
+                yield break;
             }
 
             roundFlowCoroutine = StartCoroutine(BeginNextRoundAfterDelay(tieDelay));
-            return;
+            yield break;
         }
 
         ulong eliminatedId = topTargets[0];
         ApplyVoteOutcomes(eliminatedId, false);
-        RegisterElimination(eliminatedId);
 
         string eliminatedName = GetDisplayName(eliminatedId);
         UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} was eliminated with {maxVotes} votes.");
+
+        yield return new WaitForSeconds(eliminationDuration);
+
+        RegisterElimination(eliminatedId);
 
         roundsCompleted++;
         playerVotes.Clear();
@@ -429,7 +463,7 @@ public class RoundManager : NetworkBehaviour
         if (CheckVictoryConditions(out string victoryReason, out bool playersWin))
         {
             TriggerVictory(victoryReason, playersWin);
-            return;
+            yield break;
         }
 
         roundFlowCoroutine = StartCoroutine(BeginNextRoundAfterDelay(resultDelay));
@@ -442,6 +476,7 @@ public class RoundManager : NetworkBehaviour
 
         if (IsServer)
         {
+            // Notificamos a los clientes que este jugador quedo fuera de la partida.
             eliminatedPlayersSync.Add(eliminatedId);
         }
 
@@ -460,11 +495,12 @@ public class RoundManager : NetworkBehaviour
             }
         }
 
-        // Check if the eliminated player was the Blanco
-        if (eliminatedId == blancoPlayerId.Value)
-        {
-            TriggerVictory("El Blanco ha sido eliminado!", true);
+        if (!IsServer)
             return;
+
+        if (IsPlayerBlanco(eliminatedId) && AreAllBlancosEliminated())
+        {
+            TriggerVictory("Todos los Blancos han sido eliminados!", true);
         }
     }
 
@@ -539,23 +575,23 @@ public class RoundManager : NetworkBehaviour
             case WinConditionType.Rounds:
                 if (roundsCompleted >= Mathf.Max(1, roundsToWin))
                 {
-                    bool blancoAlive = IsBlancoAlive();
-                    reason = blancoAlive
-                        ? $"Se completaron {roundsCompleted} rondas y El Blanco sobrevivio."
-                        : $"Se completaron {roundsCompleted} rondas y El Blanco no sobrevivio.";
-                    playersWin = !blancoAlive;
+                    bool anyBlancoAlive = IsBlancoAlive() > 0;
+                    reason = anyBlancoAlive
+                        ? $"Se completaron {roundsCompleted} rondas y aun queda al menos un Blanco vivo."
+                        : $"Se completaron {roundsCompleted} rondas y no quedan Blancos con vida.";
+                    playersWin = !anyBlancoAlive;
                     return true;
                 }
                 break;
             case WinConditionType.RemainingPlayers:
                 int activePlayers = GetActivePlayersCount();
-                if (activePlayers <= Mathf.Max(2, remainingPlayersToWin))
+                if (activePlayers <= Mathf.Max(1, remainingPlayersToWin))
                 {
-                    bool blancoAlive = IsBlancoAlive();
-                    reason = activePlayers == 2
-                        ? "Solo quedan dos jugadores activos en la mesa."
+                    bool anyBlancoAlive = IsBlancoAlive() > 0;
+                    reason = activePlayers == 1
+                        ? "Solo queda un jugador activo en la mesa."
                         : $"Solo quedan {activePlayers} jugadores activos.";
-                    playersWin = !blancoAlive;
+                    playersWin = !anyBlancoAlive;
                     return true;
                 }
                 break;
@@ -593,8 +629,6 @@ public class RoundManager : NetworkBehaviour
             {
                 composedMessage += $"\n{reason}";
             }
-
-            composedMessage += "\n\nHost: presiona ESPACIO para comenzar una nueva partida.";
             UIGameplayManager.Instance.SetInfoTextClientRpc(composedMessage);
         }
 
@@ -608,18 +642,39 @@ public class RoundManager : NetworkBehaviour
         PlayVictoryFeedback();
     }
 
-    bool IsBlancoAlive()
+    int IsBlancoAlive()
     {
-        if (!blancoAssignedThisMatch || blancoPlayerId.Value == PlayerActionsSync.NoTarget)
-            return false;
+        if (!blancosAssignedThisMatch)
+            return 0;
 
-        if (IsPlayerEliminated(blancoPlayerId.Value))
-            return false;
+        int BlancosAlive = 0;
 
-        if (NetworkManager.Singleton == null)
-            return false;
+        // Revisa la lista segun el rol (host o cliente) para determinar si queda algun Blanco activo.
+        IEnumerable<ulong> source = NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost
+            ? BlancoPlayers
+            : blancoPlayersCache;
 
-        return NetworkManager.Singleton.ConnectedClients.ContainsKey(blancoPlayerId.Value);
+        foreach (var blancoId in source)
+        {
+            if (!IsPlayerEliminated(blancoId))
+            {
+                if (NetworkManager.Singleton == null)
+                    return 0;
+
+                if (NetworkManager.Singleton.ConnectedClients.ContainsKey(blancoId))
+                    BlancosAlive++;
+            }
+        }
+
+        return BlancosAlive;
+    }
+
+    void HandleBlancoPlayersListChanged(NetworkListEvent<ulong> change)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost)
+            return;
+
+        RebuildBlancoPlayersCache();
     }
 
     void HandleEliminatedPlayersListChanged(NetworkListEvent<ulong> change)
@@ -639,6 +694,37 @@ public class RoundManager : NetworkBehaviour
         }
     }
 
+    void RebuildBlancoPlayersCache()
+    {
+        // En clientes no host replicamos la lista para facilitar las consultas locales.
+        blancoPlayersCache.Clear();
+        foreach (var id in blancoPlayerIds)
+        {
+            blancoPlayersCache.Add(id);
+        }
+
+        blancosAssignedThisMatch = blancoPlayersCache.Count > 0;
+    }
+
+    bool AreAllBlancosEliminated()
+    {
+        // Confirma si queda algun Blanco sin eliminar teniendo en cuenta el contexto de red.
+        IEnumerable<ulong> source = NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost
+            ? BlancoPlayers
+            : blancoPlayersCache;
+
+        if (!source.Any())
+            return false;
+
+        foreach (var blancoId in source)
+        {
+            if (!IsPlayerEliminated(blancoId))
+                return false;
+        }
+
+        return true;
+    }
+
     public bool IsPlayerEliminated(ulong clientId)
     {
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost)
@@ -647,6 +733,17 @@ public class RoundManager : NetworkBehaviour
         }
 
         return eliminatedPlayersCache.Contains(clientId);
+    }
+
+    public bool IsPlayerBlanco(ulong clientId)
+    {
+        // Permite a cualquier lado de la red saber si un jugador es Blanco usando la fuente de datos adecuada.
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost)
+        {
+            return blancoPlayerIds.Contains(clientId);
+        }
+
+        return blancoPlayersCache.Contains(clientId);
     }
 
     void ValidateVictoryFeedback()
@@ -722,25 +819,46 @@ public class RoundManager : NetworkBehaviour
         }
     }
 
-    bool TryAssignBlancoPlayer()
+    bool TryAssignBlancoPlayers()
     {
-        if (blancoAssignedThisMatch && blancoPlayerId.Value != PlayerActionsSync.NoTarget)
+        if (blancosAssignedThisMatch && blancoPlayerIds.Count > 0)
         {
             return true;
         }
 
-        var availableClients = GetActiveClients().ToList();
+        // Selecciona candidatos vivos y no eliminados para ocupar los roles de Blanco.
+        var availableClients = GetActiveClients().Select(client => client.ClientId).ToList();
         if (availableClients.Count == 0)
         {
             Debug.LogWarning("[RoundManager] No active players available to pick a Blanco.");
             return false;
         }
 
-        var selectedClient = availableClients[UnityEngine.Random.Range(0, availableClients.Count)];
-        blancoPlayerId.Value = selectedClient.ClientId;
-        blancoAssignedThisMatch = true;
-        Debug.Log($"Blanco player chosen: {blancoPlayerId.Value}");
-        return true;
+        int blancosToSelect = Mathf.Clamp(blancosPerMatch, 1, availableClients.Count);
+        availableClients = availableClients.OrderBy(_ => UnityEngine.Random.value).ToList();
+
+        // Reiniciamos la lista sincronizada antes de aplicar la nueva asignacion.
+        blancoPlayerIds.Clear();
+        blancoPlayersCache.Clear();
+
+        for (int i = 0; i < blancosToSelect; i++)
+        {
+            ulong candidate = availableClients[i];
+            blancoPlayerIds.Add(candidate);
+            blancoPlayersCache.Add(candidate);
+        }
+
+        blancosAssignedThisMatch = blancoPlayerIds.Count > 0;
+
+        var blancoLabelsList = new List<string>(blancoPlayerIds.Count);
+        foreach (var id in blancoPlayerIds)
+        {
+            blancoLabelsList.Add(id.ToString());
+        }
+        var blancoLabels = blancoLabelsList.ToArray();
+        Debug.Log($"[RoundManager] Blanco players chosen: {string.Join(", ", blancoLabels)}");
+
+        return blancosAssignedThisMatch;
     }
 
     void SetRandomWord()
@@ -762,9 +880,19 @@ public class RoundManager : NetworkBehaviour
             var player = client.PlayerObject.GetComponent<PlayerController>();
             if (player != null)
             {
-                player.SetCardValuesClientRpc(chosenWord.Value, blancoPlayerId.Value);
+                bool isBlanco = IsPlayerBlanco(client.ClientId);
+                player.SetCardValuesClientRpc(chosenWord.Value, isBlanco);
             }
         }
+    }
+
+    public void ConfigureBlancosPerMatch(int count)
+    {
+        if (!NetworkManager.Singleton.IsHost)
+            return;
+
+        // Mantiene la configuracion bajo control del host y evita valores invalidos.
+        blancosPerMatch = Mathf.Max(1, count);
     }
 
     public void ConfigureWinCondition(WinConditionType type, int threshold)
@@ -871,8 +999,3 @@ public class RoundManager : NetworkBehaviour
         sync?.ResetVotingState();
     }
 }
-
-
-
-
-

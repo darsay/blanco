@@ -106085,8 +106085,6 @@ MonoBehaviour:
         byte0027: 0
         byte0028: 0
         byte0029: 0
-  blancoPlayerId:
-    m_InternalValue: 0
 --- !u!4 &2143784127
 Transform:
   m_ObjectHideFlags: 0
