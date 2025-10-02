@@ -575,7 +575,7 @@ public class RoundManager : NetworkBehaviour
             case WinConditionType.Rounds:
                 if (roundsCompleted >= Mathf.Max(1, roundsToWin))
                 {
-                    bool anyBlancoAlive = IsBlancoAlive() > 0;
+                    bool anyBlancoAlive = BlancosAliveCount() > 0;
                     reason = anyBlancoAlive
                         ? $"Se completaron {roundsCompleted} rondas y aun queda al menos un Blanco vivo."
                         : $"Se completaron {roundsCompleted} rondas y no quedan Blancos con vida.";
@@ -587,7 +587,7 @@ public class RoundManager : NetworkBehaviour
                 int activePlayers = GetActivePlayersCount();
                 if (activePlayers <= Mathf.Max(1, remainingPlayersToWin))
                 {
-                    bool anyBlancoAlive = IsBlancoAlive() > 0;
+                    bool anyBlancoAlive = BlancosAliveCount() > 0;
                     reason = activePlayers == 1
                         ? "Solo queda un jugador activo en la mesa."
                         : $"Solo quedan {activePlayers} jugadores activos.";
@@ -642,7 +642,7 @@ public class RoundManager : NetworkBehaviour
         PlayVictoryFeedback();
     }
 
-    int IsBlancoAlive()
+    int BlancosAliveCount()
     {
         if (!blancosAssignedThisMatch)
             return 0;
