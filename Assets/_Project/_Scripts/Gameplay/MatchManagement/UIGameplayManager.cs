@@ -1,6 +1,8 @@
 ﻿using Blanco.Networking;
 using Blanco.UI;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -22,6 +24,15 @@ public class UIGameplayManager : NetworkBehaviour
 
     [SerializeField]
     GameTimer gameTimer;
+
+    [Header("Scoreboard UI")]
+    [SerializeField] private GameObject gameScorePanel;
+    [SerializeField] private TextMeshProUGUI gameScoreTitleText;
+    [SerializeField] private TextMeshProUGUI gameScoreRoundsText;
+    [SerializeField] private TextMeshProUGUI gameScoreGameTotalsText;
+    [SerializeField] private TextMeshProUGUI gameScoreCumulativeTotalsText;
+    [SerializeField] private TextMeshProUGUI gameScoreWinnerText;
+
 
     [Header("Settings")]
     [SerializeField] private float updateInterval = 1f;
@@ -89,6 +100,7 @@ public class UIGameplayManager : NetworkBehaviour
         // Configurar UI inicial
         UpdateUI();
         InitializeWinConditionUI();
+        HideGameScorePanel();
     }
 
     private void OnDisable()
@@ -445,6 +457,276 @@ public class UIGameplayManager : NetworkBehaviour
         }
 
         suppressWinConditionCallbacks = false;
+    }
+
+    public void DisplayGameScore(MatchManager.GameScoreBroadcast payload)
+    {
+        if (payload.Rounds == null)
+        {
+            payload.Rounds = new List<MatchManager.RoundScoreDto>();
+        }
+
+        if (gameScorePanel != null)
+        {
+            gameScorePanel.SetActive(true);
+        }
+
+        string victoryReason = payload.VictoryReason.ToString();
+
+        if (gameScoreTitleText != null)
+        {
+            var titleBuilder = new StringBuilder();
+            titleBuilder.Append("Juego ");
+            titleBuilder.Append(payload.GameIndex + 1);
+            titleBuilder.Append(payload.PlayersWon ? " - Ganaron los jugadores" : " - Gano el Blanco");
+            if (!string.IsNullOrWhiteSpace(victoryReason))
+            {
+                titleBuilder.Append(" - ");
+                titleBuilder.Append(victoryReason);
+            }
+            titleBuilder.Append(" (x");
+            titleBuilder.Append(payload.MultiplierApplied.ToString("0.##"));
+            titleBuilder.Append(")");
+            gameScoreTitleText.text = titleBuilder.ToString();
+        }
+
+        var roundsBuilder = new StringBuilder();
+        var gameTotals = new Dictionary<ulong, int>();
+
+        if (payload.Rounds.Count > 0)
+        {
+            foreach (var round in payload.Rounds)
+            {
+                roundsBuilder.Append("Ronda ");
+                roundsBuilder.Append(round.RoundNumber);
+                roundsBuilder.Append(" (");
+                roundsBuilder.Append(TranslateScorePhase(round.Phase));
+                roundsBuilder.Append(") x");
+                roundsBuilder.Append(round.MultiplierApplied.ToString("0.##"));
+                roundsBuilder.AppendLine();
+
+                string roundSummary = round.Summary.ToString();
+                if (!string.IsNullOrWhiteSpace(roundSummary))
+                {
+                    roundsBuilder.Append("  ");
+                    roundsBuilder.AppendLine(roundSummary);
+                }
+
+                if (round.Events != null && round.Events.Count > 0)
+                {
+                    foreach (var evt in round.Events)
+                    {
+                        int points = evt.FinalPoints;
+                        if (!gameTotals.ContainsKey(evt.PlayerId))
+                        {
+                            gameTotals[evt.PlayerId] = 0;
+                        }
+                        gameTotals[evt.PlayerId] += points;
+
+                        string playerName = GetPlayerDisplayName(evt.PlayerId);
+                        string reason = evt.Reason.ToString();
+                        string categoryLabel = TranslateScoreCategory(evt.Category);
+
+                        roundsBuilder.Append("  - ");
+                        roundsBuilder.Append(playerName);
+                        roundsBuilder.Append(": ");
+                        if (points > 0)
+                        {
+                            roundsBuilder.Append("+");
+                        }
+                        roundsBuilder.Append(points);
+                        roundsBuilder.Append(" (");
+                        roundsBuilder.Append(categoryLabel);
+                        roundsBuilder.Append(")");
+                        if (!string.IsNullOrWhiteSpace(reason))
+                        {
+                            roundsBuilder.Append(" - ");
+                            roundsBuilder.Append(reason);
+                        }
+                        roundsBuilder.AppendLine();
+                    }
+                }
+                else
+                {
+                    roundsBuilder.AppendLine("  - Sin variaciones de puntuacion");
+                }
+
+                roundsBuilder.AppendLine();
+            }
+        }
+        else
+        {
+            roundsBuilder.AppendLine("Sin eventos de puntuacion en este juego.");
+        }
+
+        if (gameScoreRoundsText != null)
+        {
+            gameScoreRoundsText.text = roundsBuilder.ToString().TrimEnd();
+        }
+
+        var matchManager = MatchManager.Instance;
+        if (matchManager != null)
+        {
+            foreach (var entry in matchManager.SyncedScores)
+            {
+                if (!gameTotals.ContainsKey(entry.PlayerId))
+                {
+                    gameTotals[entry.PlayerId] = 0;
+                }
+            }
+        }
+
+        if (gameScoreGameTotalsText != null)
+        {
+            if (gameTotals.Count == 0)
+            {
+                gameScoreGameTotalsText.text = "Puntos del juego:\n  Sin variaciones.";
+            }
+            else
+            {
+                var totalsBuilder = new StringBuilder();
+                totalsBuilder.AppendLine("Puntos del juego:");
+                foreach (var kv in gameTotals.OrderByDescending(pair => pair.Value))
+                {
+                    string playerName = GetPlayerDisplayName(kv.Key);
+                    totalsBuilder.Append("  ");
+                    totalsBuilder.Append(playerName);
+                    totalsBuilder.Append(": ");
+                    if (kv.Value > 0)
+                    {
+                        totalsBuilder.Append("+");
+                    }
+                    totalsBuilder.Append(kv.Value);
+                    totalsBuilder.AppendLine();
+                }
+
+                gameScoreGameTotalsText.text = totalsBuilder.ToString().TrimEnd();
+            }
+        }
+
+        if (gameScoreCumulativeTotalsText != null)
+        {
+            if (matchManager != null && matchManager.SyncedScores.Count > 0)
+            {
+                var cumulativeBuilder = new StringBuilder();
+                cumulativeBuilder.AppendLine("Totales acumulados:");
+
+                // Convert NetworkList to a regular List and sort it by Score descending
+                var sortedScores = new List<MatchManager.PlayerScoreState>();
+                foreach (var s in matchManager.SyncedScores)
+                {
+                    sortedScores.Add(s);
+                }
+                sortedScores.Sort((a, b) => b.Score.CompareTo(a.Score));
+
+                foreach (var entry in sortedScores)
+                {
+                    string playerName = GetPlayerDisplayName(entry.PlayerId);
+                    cumulativeBuilder.Append("  ");
+                    cumulativeBuilder.Append(playerName);
+                    cumulativeBuilder.Append(": ");
+                    cumulativeBuilder.Append(entry.Score);
+                    cumulativeBuilder.AppendLine();
+                }
+
+                gameScoreCumulativeTotalsText.text = cumulativeBuilder.ToString().TrimEnd();
+            }
+            else
+            {
+                gameScoreCumulativeTotalsText.text = string.Empty;
+            }
+        }
+
+        if (gameScoreWinnerText != null)
+        {
+            if (payload.IsFinalGame && payload.WinnerIds != null && payload.WinnerIds.Count > 0)
+            {
+                var winnerNames = new List<string>(payload.WinnerIds.Count);
+                foreach (var id in payload.WinnerIds)
+                {
+                    winnerNames.Add(GetPlayerDisplayName(id));
+                }
+
+                gameScoreWinnerText.gameObject.SetActive(true);
+                gameScoreWinnerText.text = winnerNames.Count > 1
+                    ? $"Ganadores de la partida: {string.Join(", ", winnerNames)}"
+                    : $"Ganador de la partida: {winnerNames[0]}";
+            }
+            else
+            {
+                gameScoreWinnerText.text = string.Empty;
+                gameScoreWinnerText.gameObject.SetActive(false);
+            }
+        }
+    }
+
+    public void HideGameScorePanel()
+    {
+        if (gameScoreTitleText != null)
+            gameScoreTitleText.text = string.Empty;
+        if (gameScoreRoundsText != null)
+            gameScoreRoundsText.text = string.Empty;
+        if (gameScoreGameTotalsText != null)
+            gameScoreGameTotalsText.text = string.Empty;
+        if (gameScoreCumulativeTotalsText != null)
+            gameScoreCumulativeTotalsText.text = string.Empty;
+        if (gameScoreWinnerText != null)
+        {
+            gameScoreWinnerText.text = string.Empty;
+            gameScoreWinnerText.gameObject.SetActive(false);
+        }
+        if (gameScorePanel != null)
+        {
+            gameScorePanel.SetActive(false);
+        }
+    }
+
+    string GetPlayerDisplayName(ulong playerId)
+    {
+        if (lobbyManager != null)
+        {
+            try
+            {
+                var playerInfo = lobbyManager.GetPlayerInfo(playerId);
+                if (!playerInfo.playerName.IsEmpty)
+                {
+                    return playerInfo.playerName.ToString();
+                }
+            }
+            catch
+            {
+                // Ignorar errores de lookup
+            }
+        }
+
+        return $"Jugador {playerId}";
+    }
+
+    string TranslateScoreCategory(RoundManager.ScoreCategory category)
+    {
+        switch (category)
+        {
+            case RoundManager.ScoreCategory.Survival:
+                return "Supervivencia";
+            case RoundManager.ScoreCategory.CorrectVote:
+                return "Voto acertado";
+            case RoundManager.ScoreCategory.GameWin:
+                return "Victoria";
+            default:
+                return category.ToString();
+        }
+    }
+
+    string TranslateScorePhase(RoundManager.ScorePhase phase)
+    {
+        switch (phase)
+        {
+            case RoundManager.ScorePhase.GameResult:
+                return "Resultado del juego";
+            case RoundManager.ScorePhase.RoundCompleted:
+            default:
+                return "Ronda completada";
+        }
     }
 
     public void StartGameTimer(float duration)

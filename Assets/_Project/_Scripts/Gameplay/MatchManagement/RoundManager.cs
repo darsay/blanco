@@ -11,6 +11,28 @@ public class RoundManager : NetworkBehaviour
 {
     public static RoundManager Instance;
 
+    public enum ScorePhase { RoundCompleted, GameResult }
+    public enum ScoreCategory { Survival, CorrectVote, GameWin }
+    public enum RoundConclusionType { Elimination, Tie, InvalidVotes, NoVotes }
+
+    [Serializable]
+    public class ScoreEvent
+    {
+        public ulong PlayerId;
+        public int Points;
+        public string Reason;
+        public ScoreCategory Category;
+    }
+
+    [Serializable]
+    public class RoundScoreReport
+    {
+        public int RoundNumber;
+        public ScorePhase Phase;
+        public string Summary;
+        public List<ScoreEvent> Events = new();
+    }
+
     [Header("References")]
     [SerializeField] private WordListSO wordList;
     [SerializeField] private VivoxManager vivoxManager;
@@ -44,6 +66,13 @@ public class RoundManager : NetworkBehaviour
     [SerializeField] private ParticleSystem victoryVfx;
     [SerializeField] private AudioSource victoryAudio;
 
+    [Header("Scoring")]
+    [SerializeField] private int pointsPerRoundSurvivedBlanco = 5;
+    [SerializeField] private int pointsPerRoundSurvivedPlayer = 3;
+    [SerializeField] private int pointsPerGameWinBlanco = 20;
+    [SerializeField] private int pointsPerGameWinPlayer = 20;
+    [SerializeField] private int pointsPerCorrectVote = 4;
+
     public NetworkVariable<RoundState> currentState = new NetworkVariable<RoundState>(RoundState.Inactive, writePerm: NetworkVariableWritePermission.Server);
     public NetworkVariable<FixedString32Bytes> chosenWord = new NetworkVariable<FixedString32Bytes>(default, writePerm: NetworkVariableWritePermission.Server);
     public NetworkList<ulong> blancoPlayerIds = new();
@@ -65,6 +94,7 @@ public class RoundManager : NetworkBehaviour
     private int roundsCompleted;
     private bool isGameOver;
     private bool awaitingRestart;
+    private readonly List<RoundScoreReport> currentGameScoreReports = new();
     private bool victoryFeedbackValidated;
     private bool victoryAnimatorWarned;
     private bool victoryTriggerWarned;
@@ -149,6 +179,7 @@ public class RoundManager : NetworkBehaviour
         }
 
         ResetMatchState();
+        MatchManager.Instance?.OnRoundManagerGameStarted();
         BeginRound();
     }
 
@@ -165,6 +196,7 @@ public class RoundManager : NetworkBehaviour
         isGameOver = false;
         awaitingRestart = false;
         playerVotes.Clear();
+        currentGameScoreReports.Clear();
         chosenWord.Value = default;
 
         if (NetworkManager.Singleton != null)
@@ -392,6 +424,8 @@ public class RoundManager : NetworkBehaviour
         if (playerVotes.Count == 0)
         {
             UIGameplayManager.Instance?.SetInfoTextClientRpc("No one voted. The round will restart.");
+            int roundNumberNoVotes = roundsCompleted + 1;
+            ReportRoundOutcome(roundNumberNoVotes, RoundConclusionType.NoVotes, null);
             roundsCompleted++;
             playerVotes.Clear();
 
@@ -414,6 +448,8 @@ public class RoundManager : NetworkBehaviour
         if (validVotes.Count == 0)
         {
             UIGameplayManager.Instance?.SetInfoTextClientRpc("Votes were invalid. The round will restart.");
+            int roundNumberInvalidVotes = roundsCompleted + 1;
+            ReportRoundOutcome(roundNumberInvalidVotes, RoundConclusionType.InvalidVotes, null);
             roundsCompleted++;
             playerVotes.Clear();
 
@@ -434,6 +470,8 @@ public class RoundManager : NetworkBehaviour
         {
             ApplyVoteOutcomes(0, true);
             UIGameplayManager.Instance?.SetInfoTextClientRpc("Voting ended in a tie. No one is eliminated.");
+            int roundNumberTie = roundsCompleted + 1;
+            ReportRoundOutcome(roundNumberTie, RoundConclusionType.Tie, null);
             roundsCompleted++;
             playerVotes.Clear();
 
@@ -455,6 +493,8 @@ public class RoundManager : NetworkBehaviour
 
         yield return new WaitForSeconds(eliminationDuration);
 
+        int roundNumberElimination = roundsCompleted + 1;
+        ReportRoundOutcome(roundNumberElimination, RoundConclusionType.Elimination, eliminatedId);
         RegisterElimination(eliminatedId);
 
         roundsCompleted++;
@@ -632,11 +672,9 @@ public class RoundManager : NetworkBehaviour
             UIGameplayManager.Instance.SetInfoTextClientRpc(composedMessage);
         }
 
-        MatchManager.Instance?.ShowWaitingUI();
-        if (MatchManager.Instance != null)
-        {
-            MatchManager.Instance.currentState.Value = MatchManager.MatchState.Result;
-        }
+        ReportGameWin(playersWin, reason);
+        MatchManager.Instance?.OnRoundManagerGameEnded(playersWin, reason);
+        currentGameScoreReports.Clear();
 
         ValidateVictoryFeedback();
         PlayVictoryFeedback();
@@ -794,6 +832,143 @@ public class RoundManager : NetworkBehaviour
         {
             victoryAudio.Play();
         }
+    }
+
+    void ReportGameWin(bool playersWin, string victoryReason)
+    {
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsHost)
+            return;
+
+        var report = new RoundScoreReport
+        {
+            RoundNumber = Mathf.Max(1, roundsCompleted),
+            Phase = ScorePhase.GameResult,
+            Summary = BuildGameSummary(playersWin, victoryReason)
+        };
+
+        int winPoints = playersWin ? pointsPerGameWinPlayer : pointsPerGameWinBlanco;
+        if (winPoints != 0)
+        {
+            foreach (var winnerId in EnumerateAlivePlayers())
+            {
+                bool isBlanco = IsPlayerBlanco(winnerId);
+                if (playersWin && isBlanco)
+                    continue;
+                if (!playersWin && !isBlanco)
+                    continue;
+
+                report.Events.Add(new ScoreEvent
+                {
+                    PlayerId = winnerId,
+                    Points = winPoints,
+                    Reason = playersWin ? "Gano la partida como jugador" : "Gano la partida como Blanco",
+                    Category = ScoreCategory.GameWin
+                });
+            }
+        }
+
+        currentGameScoreReports.Add(report);
+        MatchManager.Instance?.ProcessRoundScore(report);
+    }
+
+    void ReportRoundOutcome(int roundNumber, RoundConclusionType conclusionType, ulong? eliminatedPlayerId)
+    {
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsHost)
+            return;
+
+        var report = new RoundScoreReport
+        {
+            RoundNumber = Mathf.Max(1, roundNumber),
+            Phase = ScorePhase.RoundCompleted,
+            Summary = BuildRoundSummary(roundNumber, conclusionType, eliminatedPlayerId)
+        };
+
+        foreach (var survivorId in EnumerateAlivePlayers(eliminatedPlayerId))
+        {
+            bool isBlanco = IsPlayerBlanco(survivorId);
+            int points = isBlanco ? pointsPerRoundSurvivedBlanco : pointsPerRoundSurvivedPlayer;
+            if (points == 0)
+                continue;
+
+            report.Events.Add(new ScoreEvent
+            {
+                PlayerId = survivorId,
+                Points = points,
+                Reason = $"Sobrevivio la ronda {roundNumber}",
+                Category = ScoreCategory.Survival
+            });
+        }
+
+        if (conclusionType == RoundConclusionType.Elimination && eliminatedPlayerId.HasValue && pointsPerCorrectVote != 0)
+        {
+            foreach (var vote in playerVotes)
+            {
+                if (vote.Value != eliminatedPlayerId.Value)
+                    continue;
+
+                report.Events.Add(new ScoreEvent
+                {
+                    PlayerId = vote.Key,
+                    Points = pointsPerCorrectVote,
+                    Reason = $"Voto acertado en la ronda {roundNumber}",
+                    Category = ScoreCategory.CorrectVote
+                });
+            }
+        }
+
+        currentGameScoreReports.Add(report);
+        MatchManager.Instance?.ProcessRoundScore(report);
+    }
+
+    IEnumerable<ulong> EnumerateAlivePlayers(ulong? excludedPlayerId = null)
+    {
+        if (NetworkManager.Singleton == null)
+            yield break;
+
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            if (client.PlayerObject == null)
+                continue;
+
+            ulong clientId = client.ClientId;
+            if (excludedPlayerId.HasValue && excludedPlayerId.Value == clientId)
+                continue;
+
+            if (eliminatedPlayers.Contains(clientId))
+                continue;
+
+            yield return clientId;
+        }
+    }
+
+    string BuildRoundSummary(int roundNumber, RoundConclusionType conclusionType, ulong? eliminatedPlayerId)
+    {
+        switch (conclusionType)
+        {
+            case RoundConclusionType.Elimination:
+                if (eliminatedPlayerId.HasValue)
+                {
+                    string name = GetDisplayName(eliminatedPlayerId.Value);
+                    return $"Ronda {roundNumber}: {name} fue eliminado";
+                }
+                return $"Ronda {roundNumber}: un jugador fue eliminado";
+            case RoundConclusionType.Tie:
+                return $"Ronda {roundNumber}: Empate en la votacion";
+            case RoundConclusionType.InvalidVotes:
+                return $"Ronda {roundNumber}: Los votos fueron invalidos";
+            case RoundConclusionType.NoVotes:
+                return $"Ronda {roundNumber}: Nadie voto";
+            default:
+                return $"Ronda {roundNumber}";
+        }
+    }
+
+    string BuildGameSummary(bool playersWin, string victoryReason)
+    {
+        string headline = playersWin ? "Victoria para los jugadores" : "Victoria para el Blanco";
+        if (string.IsNullOrWhiteSpace(victoryReason))
+            return headline;
+        return $"{headline} - {victoryReason}";
     }
 
     [ServerRpc(RequireOwnership = false)]
