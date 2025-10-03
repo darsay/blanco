@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
@@ -15,6 +16,9 @@ public class MatchManager : NetworkBehaviour
     [SerializeField, Min(1)] private int gamesPerMatch = 3;
     [SerializeField] private float firstGameMultiplier = 1f;
     [SerializeField] private float gameMultiplierIncrement = 0.5f;
+
+    [Header("Scoreboard")]
+    [SerializeField, Min(0.1f)] private float scoreboardStepDuration = 3f;
 
     [Header("Debug")]
     [SerializeField] private bool logScoreEvents;
@@ -135,6 +139,7 @@ public class MatchManager : NetworkBehaviour
         public bool PlayersWon;
         public FixedString128Bytes VictoryReason;
         public float MultiplierApplied;
+        public float StepDuration;
         public List<RoundScoreDto> Rounds;
         public bool IsFinalGame;
         public List<ulong> WinnerIds;
@@ -145,6 +150,7 @@ public class MatchManager : NetworkBehaviour
             serializer.SerializeValue(ref PlayersWon);
             serializer.SerializeValue(ref VictoryReason);
             serializer.SerializeValue(ref MultiplierApplied);
+            serializer.SerializeValue(ref StepDuration);
 
             int roundCount = Rounds != null ? Rounds.Count : 0;
             serializer.SerializeValue(ref roundCount);
@@ -212,6 +218,7 @@ public class MatchManager : NetworkBehaviour
     private readonly List<ulong> matchWinners = new();
     private List<RoundScoreDetails> currentGameScoreDetails;
     private int currentGameIndex;
+    private Coroutine postGameRoutine;
 
     void Awake()
     {
@@ -382,6 +389,12 @@ public class MatchManager : NetworkBehaviour
         if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsHost)
             return;
 
+        if (postGameRoutine != null)
+        {
+            StopCoroutine(postGameRoutine);
+            postGameRoutine = null;
+        }
+
         currentGameScoreDetails = new List<RoundScoreDetails>();
         HideGameScoreClientRpc();
     }
@@ -463,14 +476,14 @@ public class MatchManager : NetworkBehaviour
 
         currentGameIndex++;
 
-        if (isFinalGame)
+        float waitDuration = GetScoreboardSequenceDuration(summary, isFinalGame);
+
+        if (postGameRoutine != null)
         {
-            FinalizeMatch();
+            StopCoroutine(postGameRoutine);
         }
-        else
-        {
-            RoundManager.Instance?.StartGame();
-        }
+
+        postGameRoutine = StartCoroutine(HandlePostGameSequence(waitDuration, isFinalGame));
     }
 
     void BroadcastGameScore(GameScoreSummary summary, bool isFinalGame, List<ulong> winnersSnapshot)
@@ -484,6 +497,8 @@ public class MatchManager : NetworkBehaviour
             IsFinalGame = isFinalGame,
             WinnerIds = winnersSnapshot != null ? new List<ulong>(winnersSnapshot) : new List<ulong>()
         };
+
+        payload.StepDuration = Mathf.Max(0.1f, scoreboardStepDuration);
 
         FixedString128Bytes victoryReason = summary.VictoryReason ?? string.Empty;
         payload.VictoryReason = victoryReason;
@@ -518,6 +533,38 @@ public class MatchManager : NetworkBehaviour
         }
 
         ShowGameScoreClientRpc(payload);
+    }
+
+    float GetScoreboardSequenceDuration(GameScoreSummary summary, bool isFinalGame)
+    {
+        int roundStageCount = summary.Rounds.Count > 0 ? summary.Rounds.Count : 1;
+        int stageCount = roundStageCount + 2;
+        if (isFinalGame)
+        {
+            stageCount += 1;
+        }
+
+        float stepDuration = Mathf.Max(0.1f, scoreboardStepDuration);
+        return stageCount * stepDuration;
+    }
+
+    IEnumerator HandlePostGameSequence(float waitDuration, bool isFinalGame)
+    {
+        if (waitDuration > 0f)
+        {
+            yield return new WaitForSeconds(waitDuration);
+        }
+
+        postGameRoutine = null;
+
+        if (isFinalGame)
+        {
+            FinalizeMatch();
+        }
+        else
+        {
+            RoundManager.Instance?.StartGame();
+        }
     }
 
     List<ulong> CalculateCurrentWinners()
