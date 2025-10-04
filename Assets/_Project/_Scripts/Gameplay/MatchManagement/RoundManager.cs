@@ -199,14 +199,7 @@ public class RoundManager : NetworkBehaviour
         currentGameScoreReports.Clear();
         chosenWord.Value = default;
 
-        if (NetworkManager.Singleton != null)
-        {
-            foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
-            {
-                var player = client.PlayerObject != null ? client.PlayerObject.GetComponent<PlayerController>() : null;
-                player?.ResetGhostState();
-            }
-        }
+        SpawnAllGhosts();
 
         UIGameplayManager.Instance?.SetWinConditionDisplay(winCondition, CurrentWinConditionThreshold);
         BroadcastCurrentWinCondition();
@@ -418,19 +411,19 @@ public class RoundManager : NetworkBehaviour
             yield break;
 
         currentState.Value = RoundState.Result;
+        roundsCompleted++;
         UIGameplayManager.Instance?.HideInfoTextClientRpc();
         HideVotingWeapons();
 
         if (playerVotes.Count == 0)
         {
             UIGameplayManager.Instance?.SetInfoTextClientRpc("No one voted. The round will restart.");
-            int roundNumberNoVotes = roundsCompleted + 1;
-            ReportRoundOutcome(roundNumberNoVotes, RoundConclusionType.NoVotes, null);
-            roundsCompleted++;
+            ReportRoundOutcome(roundsCompleted, RoundConclusionType.NoVotes, null);
             playerVotes.Clear();
 
             if (CheckVictoryConditions(out string reason, out bool playersWinResult))
             {
+                yield return new WaitForSeconds(resultDelay);
                 TriggerVictory(reason, playersWinResult);
                 yield break;
             }
@@ -448,13 +441,12 @@ public class RoundManager : NetworkBehaviour
         if (validVotes.Count == 0)
         {
             UIGameplayManager.Instance?.SetInfoTextClientRpc("Votes were invalid. The round will restart.");
-            int roundNumberInvalidVotes = roundsCompleted + 1;
-            ReportRoundOutcome(roundNumberInvalidVotes, RoundConclusionType.InvalidVotes, null);
-            roundsCompleted++;
+            ReportRoundOutcome(roundsCompleted, RoundConclusionType.InvalidVotes, null);
             playerVotes.Clear();
 
             if (CheckVictoryConditions(out string reason, out bool playersWinResult))
             {
+                yield return new WaitForSeconds(resultDelay);
                 TriggerVictory(reason, playersWinResult);
                 yield break;
             }
@@ -470,13 +462,12 @@ public class RoundManager : NetworkBehaviour
         {
             ApplyVoteOutcomes(0, true);
             UIGameplayManager.Instance?.SetInfoTextClientRpc("Voting ended in a tie. No one is eliminated.");
-            int roundNumberTie = roundsCompleted + 1;
-            ReportRoundOutcome(roundNumberTie, RoundConclusionType.Tie, null);
-            roundsCompleted++;
+            ReportRoundOutcome(roundsCompleted, RoundConclusionType.Tie, null);
             playerVotes.Clear();
 
             if (CheckVictoryConditions(out string reason, out bool playersWinResult))
             {
+                yield return new WaitForSeconds(resultDelay);
                 TriggerVictory(reason, playersWinResult);
                 yield break;
             }
@@ -491,13 +482,28 @@ public class RoundManager : NetworkBehaviour
         string eliminatedName = GetDisplayName(eliminatedId);
         UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} was eliminated with {maxVotes} votes.");
 
-        yield return new WaitForSeconds(eliminationDuration);
+        //TODO: FADE OFF DE LA VOZ DEL ELIMINADO
 
-        int roundNumberElimination = roundsCompleted + 1;
-        ReportRoundOutcome(roundNumberElimination, RoundConclusionType.Elimination, eliminatedId);
+        ReportRoundOutcome(roundsCompleted, RoundConclusionType.Elimination, eliminatedId);
         RegisterElimination(eliminatedId);
 
-        roundsCompleted++;
+        yield return new WaitForSeconds(eliminationDuration);
+
+        if (IsPlayerBlanco(eliminatedId) && AreAllBlancosEliminated())
+        {
+            UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} era Blanko. Todos los Blancos han sido eliminados!");
+            yield return new WaitForSeconds(resultDelay);
+            TriggerVictory("Todos los Blancos han sido eliminados!", true);
+        } else if (IsPlayerBlanco(eliminatedId) && !AreAllBlancosEliminated())
+        {
+            UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} era Blanko. Pero quedan más en la partida!");
+        }else if (!IsPlayerBlanco(eliminatedId))
+        {
+            UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} no era Blanko.");
+        }
+
+        yield return new WaitForSeconds(eliminationDuration);
+
         playerVotes.Clear();
 
         if (CheckVictoryConditions(out string victoryReason, out bool playersWin))
@@ -537,11 +543,6 @@ public class RoundManager : NetworkBehaviour
 
         if (!IsServer)
             return;
-
-        if (IsPlayerBlanco(eliminatedId) && AreAllBlancosEliminated())
-        {
-            TriggerVictory("Todos los Blancos han sido eliminados!", true);
-        }
     }
 
     void HideVotingWeapons()
@@ -673,11 +674,26 @@ public class RoundManager : NetworkBehaviour
         }
 
         ReportGameWin(playersWin, reason);
+        
+        SpawnAllGhosts();
+
         MatchManager.Instance?.OnRoundManagerGameEnded(playersWin, reason);
         currentGameScoreReports.Clear();
 
         ValidateVictoryFeedback();
         PlayVictoryFeedback();
+    }
+
+    void SpawnAllGhosts()
+    {
+        if (NetworkManager.Singleton != null)
+        {
+            foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+            {
+                var player = client.PlayerObject != null ? client.PlayerObject.GetComponent<PlayerController>() : null;
+                player?.ResetGhostState();
+            }
+        }
     }
 
     int BlancosAliveCount()
