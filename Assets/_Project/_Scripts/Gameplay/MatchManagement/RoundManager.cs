@@ -52,6 +52,19 @@ public class RoundManager : NetworkBehaviour
         public List<ScoreEvent> Events = new();
     }
 
+    struct VoteRevealEntry
+    {
+        public ulong TargetId;
+        public int VoteCount;
+        public List<ulong> Voters;
+    }
+
+    struct VoteTally
+    {
+        public ulong Target;
+        public int Count;
+    }
+
     [Header("References")]
     [SerializeField] private WordListSO wordList;
     [SerializeField] private VivoxManager vivoxManager;
@@ -66,6 +79,14 @@ public class RoundManager : NetworkBehaviour
     [SerializeField] private float resultDelay = 5f;
     [SerializeField] private float tieDelay = 4f;
     [SerializeField] private float eliminationDuration = 4f;
+
+    [Header("Vote Reveal Sequence")]
+    [SerializeField] private float voteRevealStepDuration = 2.5f;
+    [SerializeField] private float voteRevealBetweenStepsDelay = 0.75f;
+    [SerializeField] private float voteRevealCameraLockDuration = 1.5f;
+    [SerializeField] private float voteRevealFocusBlendDuration = 0.35f;
+    [SerializeField] private float voteRevealFocusHeightOffset = 1.6f;
+    [SerializeField] private bool lockInputDuringVoteReveal = true;
 
     public enum RoundState : byte { Inactive, ShowingCards, SayWord, Talking, Voting, Result }
     public enum WinConditionType { Rounds, RemainingPlayers }
@@ -432,10 +453,19 @@ public class RoundManager : NetworkBehaviour
         currentState.Value = RoundState.Result;
         roundsCompleted++;
         UIGameplayManager.Instance?.HideInfoTextClientRpc();
-        HideVotingWeapons();
+
+        bool weaponsHidden = false;
+        void HideWeaponsOnce()
+        {
+            if (weaponsHidden)
+                return;
+            HideVotingWeapons();
+            weaponsHidden = true;
+        }
 
         if (playerVotes.Count == 0)
         {
+            HideWeaponsOnce();
             UIGameplayManager.Instance?.SetInfoTextClientRpc("No one voted. The round will restart.");
             ReportRoundOutcome(roundsCompleted, RoundConclusionType.NoVotes, null);
             playerVotes.Clear();
@@ -454,11 +484,12 @@ public class RoundManager : NetworkBehaviour
         var validVotes = playerVotes
             .Where(kv => NetworkManager.Singleton.ConnectedClients.ContainsKey(kv.Value) && !eliminatedPlayers.Contains(kv.Value))
             .GroupBy(kv => kv.Value)
-            .Select(group => new { Target = group.Key, Count = group.Count() })
+            .Select(group => new VoteTally { Target = group.Key, Count = group.Count() })
             .ToList();
 
         if (validVotes.Count == 0)
         {
+            HideWeaponsOnce();
             UIGameplayManager.Instance?.SetInfoTextClientRpc("Votes were invalid. The round will restart.");
             ReportRoundOutcome(roundsCompleted, RoundConclusionType.InvalidVotes, null);
             playerVotes.Clear();
@@ -474,11 +505,20 @@ public class RoundManager : NetworkBehaviour
             yield break;
         }
 
+        var voteLookup = BuildVoteLookup();
+        var revealEntries = BuildVoteRevealEntries(validVotes, voteLookup);
         int maxVotes = validVotes.Max(v => v.Count);
         var topTargets = validVotes.Where(v => v.Count == maxVotes).Select(v => v.Target).ToList();
+        ulong? eliminatedId = topTargets.Count == 1 ? topTargets[0] : (ulong?)null;
+
+        if (revealEntries.Count > 0)
+        {
+            yield return PlayVoteRevealSequence(revealEntries, eliminatedId, topTargets);
+        }
 
         if (topTargets.Count != 1)
         {
+            HideWeaponsOnce();
             ApplyVoteOutcomes(0, true);
             UIGameplayManager.Instance?.SetInfoTextClientRpc("Voting ended in a tie. No one is eliminated.");
             ReportRoundOutcome(roundsCompleted, RoundConclusionType.Tie, null);
@@ -495,34 +535,39 @@ public class RoundManager : NetworkBehaviour
             yield break;
         }
 
-        ulong eliminatedId = topTargets[0];
-        ApplyVoteOutcomes(eliminatedId, false);
+        ulong eliminated = eliminatedId.Value;
+        ApplyVoteOutcomes(eliminated, false);
 
-        string eliminatedName = GetDisplayName(eliminatedId);
+        string eliminatedName = GetDisplayName(eliminated);
         UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} was eliminated with {maxVotes} votes.");
 
-        //TODO: FADE OFF DE LA VOZ DEL ELIMINADO
+        // TODO: Integrate elimination-specific animation once assets are ready.
 
-        ReportRoundOutcome(roundsCompleted, RoundConclusionType.Elimination, eliminatedId);
-        RegisterElimination(eliminatedId);
+        ReportRoundOutcome(roundsCompleted, RoundConclusionType.Elimination, eliminated);
+        RegisterElimination(eliminated);
 
         yield return new WaitForSeconds(eliminationDuration);
 
-        if (IsPlayerBlanco(eliminatedId) && AreAllBlancosEliminated())
+        if (IsPlayerBlanco(eliminated) && AreAllBlancosEliminated())
         {
             UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} era Blanko. Todos los Blancos han sido eliminados!");
             yield return new WaitForSeconds(resultDelay);
             TriggerVictory("Todos los Blancos han sido eliminados!", true);
-        } else if (IsPlayerBlanco(eliminatedId) && !AreAllBlancosEliminated())
+            HideWeaponsOnce();
+            yield break;
+        }
+        else if (IsPlayerBlanco(eliminated) && !AreAllBlancosEliminated())
         {
-            UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} era Blanko. Pero quedan más en la partida!");
-        }else if (!IsPlayerBlanco(eliminatedId))
+            UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} era Blanko. Pero quedan mas en la partida!");
+        }
+        else if (!IsPlayerBlanco(eliminated))
         {
             UIGameplayManager.Instance?.SetInfoTextClientRpc($"{eliminatedName} no era Blanko.");
         }
 
         yield return new WaitForSeconds(eliminationDuration);
 
+        HideWeaponsOnce();
         playerVotes.Clear();
 
         if (CheckVictoryConditions(out string victoryReason, out bool playersWin))
@@ -532,6 +577,143 @@ public class RoundManager : NetworkBehaviour
         }
 
         roundFlowCoroutine = StartCoroutine(BeginNextRoundAfterDelay(resultDelay));
+    }
+
+    Dictionary<ulong, List<ulong>> BuildVoteLookup()
+    {
+        var lookup = new Dictionary<ulong, List<ulong>>();
+        foreach (var kv in playerVotes)
+        {
+            if (!lookup.TryGetValue(kv.Value, out var voters))
+            {
+                voters = new List<ulong>();
+                lookup[kv.Value] = voters;
+            }
+
+            voters.Add(kv.Key);
+        }
+
+        return lookup;
+    }
+
+    List<VoteRevealEntry> BuildVoteRevealEntries(IEnumerable<VoteTally> tallies, Dictionary<ulong, List<ulong>> voteLookup)
+    {
+        var orderedTallies = tallies
+            .OrderBy(t => t.Count)
+            .ThenBy(t => t.Target)
+            .ToList();
+
+        var entries = new List<VoteRevealEntry>(orderedTallies.Count);
+        foreach (var tally in orderedTallies)
+        {
+            if (tally.Count <= 0)
+                continue;
+
+            if (!voteLookup.TryGetValue(tally.Target, out var voters))
+                continue;
+
+            entries.Add(new VoteRevealEntry
+            {
+                TargetId = tally.Target,
+                VoteCount = tally.Count,
+                Voters = new List<ulong>(voters)
+            });
+        }
+
+        return entries;
+    }
+
+    IEnumerator PlayVoteRevealSequence(List<VoteRevealEntry> entries, ulong? eliminatedId, List<ulong> topTargets)
+    {
+        if (entries == null || entries.Count == 0)
+            yield break;
+
+        var topTargetSet = new HashSet<ulong>(topTargets);
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            bool isFinalShot = eliminatedId.HasValue && entry.TargetId == eliminatedId.Value;
+            bool isTieLeader = !eliminatedId.HasValue && topTargetSet.Contains(entry.TargetId);
+
+            BroadcastVoteRevealStepClientRpc(entry.TargetId, entry.VoteCount, entry.Voters.ToArray(), isFinalShot, isTieLeader);
+            ApplyVoteRevealFocus(entry.TargetId, entry.Voters, lockInputDuringVoteReveal);
+
+            if (voteRevealStepDuration > 0f)
+            {
+                yield return new WaitForSeconds(voteRevealStepDuration);
+            }
+
+            if (!isFinalShot)
+            {
+                // TODO: Trigger failed shot animation for this reveal step voters.
+            }
+            else
+            {
+                // TODO: Trigger successful elimination shot animation for this reveal step voters.
+            }
+
+            if (i < entries.Count - 1 && voteRevealBetweenStepsDelay > 0f)
+            {
+                yield return new WaitForSeconds(voteRevealBetweenStepsDelay);
+            }
+        }
+    }
+
+    void ApplyVoteRevealFocus(ulong focusTargetId, IReadOnlyList<ulong> voters, bool lockCamera)
+    {
+        if (NetworkManager.Singleton == null)
+            return;
+
+        if (!TryGetFocusPoint(focusTargetId, out var focusPoint))
+            return;
+
+        var voterSet = new HashSet<ulong>(voters);
+
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            var player = client.PlayerObject != null ? client.PlayerObject.GetComponent<PlayerController>() : null;
+            if (player == null)
+                continue;
+
+            bool isVoter = voterSet.Contains(client.ClientId);
+            bool isTarget = client.ClientId == focusTargetId;
+
+            if (!isTarget)
+            {
+                player.ForceLookAtPointClientRpc(focusPoint, voteRevealFocusBlendDuration, voteRevealCameraLockDuration, lockCamera, false);
+                player.PointClientRpc(isVoter);
+                player.AimClientRpc(isVoter);
+            }
+            else
+            {
+                player.PointClientRpc(false);
+                player.AimClientRpc(false);
+            }
+        }
+    }
+
+    bool TryGetFocusPoint(ulong clientId, out Vector3 focusPoint)
+    {
+        focusPoint = Vector3.zero;
+
+        if (NetworkManager.Singleton == null)
+            return false;
+
+        if (!NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
+            return false;
+
+        if (client.PlayerObject == null)
+            return false;
+
+        focusPoint = client.PlayerObject.transform.position + Vector3.up * voteRevealFocusHeightOffset;
+        return true;
+    }
+
+    [ClientRpc]
+    void BroadcastVoteRevealStepClientRpc(ulong focusTargetId, int voteCount, ulong[] voterIds, bool isFinalShot, bool isTieLeader)
+    {
+        UIGameplayManager.Instance?.ShowVoteRevealStep(focusTargetId, voteCount, voterIds, isFinalShot, isTieLeader);
     }
 
     void RegisterElimination(ulong eliminatedId)

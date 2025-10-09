@@ -271,9 +271,55 @@ public class UIGameplayManager : NetworkBehaviour
     [ClientRpc]
     public void SetInfoTextClientRpc(string text)
     {
-        if (infoText == null) return;
+        SetInfoText(text);
+    }
+
+    public void SetInfoText(string text)
+    {
+        if (infoText == null)
+            return;
+
         infoText.gameObject.SetActive(true);
         infoText.text = text;
+    }
+
+    public void ShowVoteRevealStep(ulong focusTargetId, int voteCount, ulong[] voterIds, bool isFinalShot, bool isTieLeader)
+    {
+        var builder = new StringBuilder();
+        string targetName = GetDisplayName(focusTargetId);
+        builder.Append(targetName);
+        builder.Append(" tiene ");
+        builder.Append(voteCount);
+        builder.Append(voteCount == 1 ? " voto" : " votos");
+
+        if (voterIds != null && voterIds.Length > 0)
+        {
+            builder.Append(" de ");
+            builder.Append(voterIds.Length);
+            builder.Append(voterIds.Length == 1 ? " jugador" : " jugadores");
+
+            var voterNames = new List<string>(voterIds.Length);
+            foreach (var voterId in voterIds)
+            {
+                voterNames.Add(GetDisplayName(voterId));
+            }
+
+            builder.Append(": ");
+            builder.Append(string.Join(", ", voterNames));
+        }
+
+        if (isTieLeader && !isFinalShot)
+        {
+            builder.Append(" - Empate");
+        }
+        else if (isFinalShot)
+        {
+            builder.Append(" - Objetivo final");
+        }
+
+        SetInfoText(builder.ToString());
+
+        // TODO: disparar animaciones de interfaz del reveal usando isFinalShot/isTieLeader.
     }
 
     [ClientRpc]

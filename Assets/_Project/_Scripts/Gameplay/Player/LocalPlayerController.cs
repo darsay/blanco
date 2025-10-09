@@ -31,6 +31,12 @@ public class LocalPlayerController : NetworkBehaviour
     [Header("Sensitivity")]
     public float sensitivity = 100f;
 
+    [Header("Camera Control")]
+    [SerializeField] private bool enforceCursorLock = true;
+    [SerializeField] private float forcedLookBlendDuration = 0.35f;
+    [SerializeField] private float forcedLookHoldGrace = 0.15f;
+    [SerializeField] private float voteSelectionFocusHeightOffset = 1.6f;
+
     [Header("Rotation Limits")]
     public float minVerticalAngle = -45f;
     public float maxVerticalAngle = 45f;
@@ -40,6 +46,10 @@ public class LocalPlayerController : NetworkBehaviour
     private float verticalRotation = 0f;
     private float horizontalRotation = 0f;
     private ulong currentVoteTarget = PlayerActionsSync.NoTarget;
+    private bool cameraInputLocked;
+    private bool cameraManualUnlockRequired;
+    private float cameraUnlockTime;
+    private Coroutine forcedLookRoutine;
 
     // Marcas internas
     bool _positionalReady = false;
@@ -63,7 +73,13 @@ public class LocalPlayerController : NetworkBehaviour
 
     void Update()
     {
-        if (!IsOwner) return;
+        if (!IsOwner)
+            return;
+
+        if (enforceCursorLock)
+        {
+            MaintainCursorLock();
+        }
 
         if (NetworkManager.Singleton.IsHost && MatchManager.Instance != null && MatchManager.Instance.currentState.Value != MatchManager.MatchState.Playing)
         {
@@ -74,19 +90,8 @@ public class LocalPlayerController : NetworkBehaviour
         HandleSeeCard();
         HandleVotingSelection();
 
-        float mouseX = Input.GetAxis("Mouse X") * sensitivity * Time.deltaTime;
-        float mouseY = Input.GetAxis("Mouse Y") * sensitivity * Time.deltaTime;
-
-        horizontalRotation += mouseX;
-        verticalRotation -= mouseY;
-
-        horizontalRotation = Mathf.Clamp(horizontalRotation, minHorizontalAngle, maxHorizontalAngle);
-        verticalRotation = Mathf.Clamp(verticalRotation, minVerticalAngle, maxVerticalAngle);
-
-        if (playerCamera != null)
-        {
-            playerCamera.transform.localRotation = Quaternion.Euler(verticalRotation, horizontalRotation, 0f);
-        }
+        UpdateCameraInput();
+        ApplyCameraRotation();
     }
 
     private void HandleBeginingMatch()
@@ -133,6 +138,209 @@ public class LocalPlayerController : NetworkBehaviour
         }
     }
 
+    void UpdateCameraInput()
+    {
+        if (playerCamera == null)
+            return;
+
+        if (cameraInputLocked)
+        {
+            if (!cameraManualUnlockRequired && Time.time >= cameraUnlockTime)
+            {
+                ReleaseForcedLook();
+            }
+        }
+
+        if (cameraInputLocked)
+            return;
+
+        float mouseX = Input.GetAxis("Mouse X") * sensitivity * Time.deltaTime;
+        float mouseY = Input.GetAxis("Mouse Y") * sensitivity * Time.deltaTime;
+
+        horizontalRotation += mouseX;
+        verticalRotation -= mouseY;
+
+        horizontalRotation = Mathf.Clamp(horizontalRotation, minHorizontalAngle, maxHorizontalAngle);
+        verticalRotation = Mathf.Clamp(verticalRotation, minVerticalAngle, maxVerticalAngle);
+    }
+
+    void ApplyCameraRotation()
+    {
+        if (playerCamera == null)
+            return;
+
+        playerCamera.transform.localRotation = Quaternion.Euler(verticalRotation, horizontalRotation, 0f);
+    }
+
+    void MaintainCursorLock()
+    {
+        if (!enforceCursorLock)
+            return;
+
+        if (Cursor.lockState != CursorLockMode.Locked)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+        }
+
+        if (Cursor.visible)
+        {
+            Cursor.visible = false;
+        }
+    }
+
+    void ReleaseForcedLook()
+    {
+        cameraInputLocked = false;
+        cameraManualUnlockRequired = false;
+        cameraUnlockTime = 0f;
+
+        if (forcedLookRoutine != null)
+        {
+            StopCoroutine(forcedLookRoutine);
+            forcedLookRoutine = null;
+        }
+    }
+
+    public void ForceLookAtPoint(Vector3 worldPoint, float blendDuration, float holdDuration, bool lockInput, bool manualUnlock = false)
+    {
+        if (playerCamera == null)
+            return;
+
+        Vector3 worldDirection = worldPoint - playerCamera.transform.position;
+        if (worldDirection.sqrMagnitude < 0.0001f)
+            return;
+
+        Transform pivot = playerCamera.transform.parent != null ? playerCamera.transform.parent : playerCamera.transform;
+        Quaternion targetWorldRotation = Quaternion.LookRotation(worldDirection.normalized, Vector3.up);
+        Quaternion targetLocalRotation = pivot != playerCamera.transform
+            ? Quaternion.Inverse(pivot.rotation) * targetWorldRotation
+            : targetWorldRotation;
+
+        Vector3 euler = targetLocalRotation.eulerAngles;
+        float targetVertical = Mathf.Clamp(NormalizeAngle(euler.x), minVerticalAngle, maxVerticalAngle);
+        float targetHorizontal = Mathf.Clamp(NormalizeAngle(euler.y), minHorizontalAngle, maxHorizontalAngle);
+
+        if (forcedLookRoutine != null)
+        {
+            StopCoroutine(forcedLookRoutine);
+        }
+
+        forcedLookRoutine = StartCoroutine(BlendCameraRotation(targetVertical, targetHorizontal, Mathf.Max(0f, blendDuration)));
+
+        if (lockInput)
+        {
+            cameraInputLocked = true;
+            cameraManualUnlockRequired = manualUnlock;
+            cameraUnlockTime = manualUnlock
+                ? float.PositiveInfinity
+                : Time.time + Mathf.Max(holdDuration, forcedLookHoldGrace);
+        }
+    }
+
+    IEnumerator BlendCameraRotation(float targetVertical, float targetHorizontal, float duration)
+    {
+        float startVertical = verticalRotation;
+        float startHorizontal = horizontalRotation;
+
+        if (duration <= 0f)
+        {
+            verticalRotation = targetVertical;
+            horizontalRotation = targetHorizontal;
+            ApplyCameraRotation();
+            forcedLookRoutine = null;
+            yield break;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            float t = Mathf.Clamp01(elapsed / duration);
+            verticalRotation = Mathf.LerpAngle(startVertical, targetVertical, t);
+            horizontalRotation = Mathf.LerpAngle(startHorizontal, targetHorizontal, t);
+            ApplyCameraRotation();
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        verticalRotation = targetVertical;
+        horizontalRotation = targetHorizontal;
+        ApplyCameraRotation();
+        forcedLookRoutine = null;
+    }
+
+    static float NormalizeAngle(float angle)
+    {
+        angle %= 360f;
+        if (angle > 180f)
+        {
+            angle -= 360f;
+        }
+        else if (angle < -180f)
+        {
+            angle += 360f;
+        }
+        return angle;
+    }
+
+    void ApplyVoteSelectionCameraLock(ulong targetClientId, PlayerController targetController)
+    {
+        if (targetClientId == PlayerActionsSync.NoTarget)
+        {
+            ReleaseSelectionCameraLock();
+            return;
+        }
+
+        if (TryGetSelectionFocusPoint(targetClientId, targetController, out var focusPoint))
+        {
+            ForceLookAtPoint(focusPoint, forcedLookBlendDuration, 0f, true, true);
+        }
+        else
+        {
+            cameraInputLocked = true;
+            cameraManualUnlockRequired = true;
+            cameraUnlockTime = float.PositiveInfinity;
+        }
+    }
+
+    void ReleaseSelectionCameraLock()
+    {
+        if (cameraManualUnlockRequired)
+        {
+            ReleaseForcedLook();
+        }
+    }
+
+    bool TryGetSelectionFocusPoint(ulong clientId, PlayerController controller, out Vector3 focusPoint)
+    {
+        if (controller != null)
+        {
+            focusPoint = controller.transform.position + Vector3.up * voteSelectionFocusHeightOffset;
+            return true;
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client) && client.PlayerObject != null)
+        {
+            focusPoint = client.PlayerObject.transform.position + Vector3.up * voteSelectionFocusHeightOffset;
+            return true;
+        }
+
+        focusPoint = Vector3.zero;
+        return false;
+    }
+
+    PlayerController ResolvePlayerController(ulong clientId)
+    {
+        if (clientId == PlayerActionsSync.NoTarget)
+            return null;
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client) && client.PlayerObject != null)
+        {
+            return client.PlayerObject.GetComponent<PlayerController>();
+        }
+
+        return null;
+    }
+
     void HandleVotingSelection()
     {
         if (isGhost)
@@ -143,20 +351,27 @@ public class LocalPlayerController : NetworkBehaviour
 
         PlayerCollider targetCollider = GetCurrentVoteTarget();
 
-        if (Input.GetMouseButtonDown(0))
+        bool mousePressed = Input.GetMouseButtonDown(0);
+        bool mouseHeld = Input.GetMouseButton(0);
+        bool hasSelection = currentVoteTarget != PlayerActionsSync.NoTarget;
+
+        if (mousePressed && cameraInputLocked && cameraManualUnlockRequired && hasSelection)
         {
-            if (targetCollider != null && targetCollider.OwnerController != null && !targetCollider.OwnerController.IsGhost)
+            ClearVoteSelection(true);
+            return;
+        }
+
+        if ((mousePressed || mouseHeld) && targetCollider != null && targetCollider.OwnerController != null && !targetCollider.OwnerController.IsGhost && !cameraInputLocked)
+        {
+            ulong targetClientId = targetCollider.OwnerController.OwnerClientId;
+            if (targetClientId != OwnerClientId)
             {
-                ulong targetClientId = targetCollider.OwnerController.OwnerClientId;
-                if (targetClientId != OwnerClientId)
-                {
-                    SelectVoteTarget(targetClientId);
-                }
+                SelectVoteTarget(targetClientId);
             }
-            else
-            {
-                ClearVoteSelection(true);
-            }
+        }
+        else if (mousePressed && !cameraInputLocked)
+        {
+            ClearVoteSelection(true);
         }
     }
 
@@ -225,6 +440,7 @@ public class LocalPlayerController : NetworkBehaviour
             RoundManager.Instance.SubmitVoteServerRpc(targetClientId);
         }
 
+        ApplyVoteSelectionCameraLock(targetClientId, ResolvePlayerController(targetClientId));
         UpdateVoteSelectionUI(targetClientId);
     }
 
@@ -245,6 +461,7 @@ public class LocalPlayerController : NetworkBehaviour
             RoundManager.Instance.SubmitVoteServerRpc(PlayerActionsSync.NoTarget);
         }
 
+        ReleaseSelectionCameraLock();
         UpdateVoteSelectionUI(PlayerActionsSync.NoTarget);
     }
 
@@ -401,6 +618,15 @@ public class LocalPlayerController : NetworkBehaviour
 
         currentVoteTarget = newValue;
         UpdateVoteSelectionUI(newValue);
+
+        if (newValue == PlayerActionsSync.NoTarget)
+        {
+            ReleaseSelectionCameraLock();
+        }
+        else
+        {
+            ApplyVoteSelectionCameraLock(newValue, ResolvePlayerController(newValue));
+        }
     }
 
     void PlayVotingResult(bool success, bool isTie)
@@ -516,6 +742,8 @@ public class LocalPlayerController : NetworkBehaviour
 
     void OnDisable()
     {
+        ReleaseForcedLook();
+
         if (playerActionsSync != null)
         {
             playerActionsSync.voteOutcome.OnValueChanged -= OnVoteOutcomeChanged;

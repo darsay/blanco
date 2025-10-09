@@ -207,6 +207,19 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
+    [ClientRpc]
+    public void ForceLookAtPointClientRpc(Vector3 focusPoint, float blendDuration, float holdDuration, bool lockInput, bool manualUnlock)
+    {
+        if (IsOwner)
+        {
+            localPlayerController?.ForceLookAtPoint(focusPoint, blendDuration, holdDuration, lockInput, manualUnlock);
+        }
+        else
+        {
+            remotePlayerController?.ForceLookAtPoint(focusPoint);
+        }
+    }
+
     public void SetGhostStateServer(bool ghost)
     {
         if (!NetworkManager.Singleton.IsHost)

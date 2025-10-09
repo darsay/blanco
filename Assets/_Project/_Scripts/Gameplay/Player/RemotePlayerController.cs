@@ -83,6 +83,24 @@ public class RemotePlayerController : NetworkBehaviour
         }
     }
 
+    public void ForceLookAtPoint(Vector3 worldPoint)
+    {
+        if (torsoRotator == null)
+            return;
+
+        Vector3 direction = worldPoint - torsoRotator.position;
+        if (direction.sqrMagnitude < 0.0001f)
+            return;
+
+        direction.Normalize();
+        torsoRotator.forward = direction;
+
+        if (torsoTarget != null)
+        {
+            torsoTarget.position = torsoRotator.position + direction * 2f;
+        }
+    }
+
     void ValidateFeedbackReferences()
     {
         if (feedbackRefsValidated)
