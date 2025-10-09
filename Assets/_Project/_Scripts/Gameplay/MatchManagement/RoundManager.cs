@@ -20,8 +20,26 @@ public class RoundManager : NetworkBehaviour
     {
         public ulong PlayerId;
         public int Points;
-        public string Reason;
+        public bool IsBlanco;
         public ScoreCategory Category;
+    }
+
+    [Serializable]
+    public struct RoundSummaryData
+    {
+        public RoundConclusionType ConclusionType;
+        public bool HasEliminatedPlayer;
+        public ulong EliminatedPlayerId;
+    }
+
+    [Serializable]
+    public struct GameResultSummaryData
+    {
+        public bool PlayersWin;
+        public WinConditionType WinCondition;
+        public int RoundsCompletedSnapshot;
+        public int ActivePlayersSnapshot;
+        public bool AnyBlancoAliveSnapshot;
     }
 
     [Serializable]
@@ -29,7 +47,8 @@ public class RoundManager : NetworkBehaviour
     {
         public int RoundNumber;
         public ScorePhase Phase;
-        public string Summary;
+        public RoundSummaryData RoundSummary;
+        public GameResultSummaryData GameSummary;
         public List<ScoreEvent> Events = new();
     }
 
@@ -673,7 +692,7 @@ public class RoundManager : NetworkBehaviour
             UIGameplayManager.Instance.SetInfoTextClientRpc(composedMessage);
         }
 
-        ReportGameWin(playersWin, reason);
+        ReportGameWin(playersWin);
         
         SpawnAllGhosts();
 
@@ -850,7 +869,7 @@ public class RoundManager : NetworkBehaviour
         }
     }
 
-    void ReportGameWin(bool playersWin, string victoryReason)
+    void ReportGameWin(bool playersWin)
     {
         if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsHost)
             return;
@@ -859,7 +878,14 @@ public class RoundManager : NetworkBehaviour
         {
             RoundNumber = Mathf.Max(1, roundsCompleted),
             Phase = ScorePhase.GameResult,
-            Summary = BuildGameSummary(playersWin, victoryReason)
+            GameSummary = new GameResultSummaryData
+            {
+                PlayersWin = playersWin,
+                WinCondition = winCondition,
+                RoundsCompletedSnapshot = Mathf.Max(1, roundsCompleted),
+                ActivePlayersSnapshot = GetActivePlayersCount(),
+                AnyBlancoAliveSnapshot = BlancosAliveCount() > 0
+            }
         };
 
         int winPoints = playersWin ? pointsPerGameWinPlayer : pointsPerGameWinBlanco;
@@ -877,7 +903,7 @@ public class RoundManager : NetworkBehaviour
                 {
                     PlayerId = winnerId,
                     Points = winPoints,
-                    Reason = playersWin ? "Gano la partida como jugador" : "Gano la partida como Blanco",
+                    IsBlanco = isBlanco,
                     Category = ScoreCategory.GameWin
                 });
             }
@@ -896,7 +922,12 @@ public class RoundManager : NetworkBehaviour
         {
             RoundNumber = Mathf.Max(1, roundNumber),
             Phase = ScorePhase.RoundCompleted,
-            Summary = BuildRoundSummary(roundNumber, conclusionType, eliminatedPlayerId)
+            RoundSummary = new RoundSummaryData
+            {
+                ConclusionType = conclusionType,
+                HasEliminatedPlayer = eliminatedPlayerId.HasValue,
+                EliminatedPlayerId = eliminatedPlayerId.GetValueOrDefault()
+            }
         };
 
         foreach (var survivorId in EnumerateAlivePlayers(eliminatedPlayerId))
@@ -910,7 +941,7 @@ public class RoundManager : NetworkBehaviour
             {
                 PlayerId = survivorId,
                 Points = points,
-                Reason = $"Sobrevivio la ronda {roundNumber}",
+                IsBlanco = isBlanco,
                 Category = ScoreCategory.Survival
             });
         }
@@ -926,7 +957,7 @@ public class RoundManager : NetworkBehaviour
                 {
                     PlayerId = vote.Key,
                     Points = pointsPerCorrectVote,
-                    Reason = $"Voto acertado en la ronda {roundNumber}",
+                    IsBlanco = IsPlayerBlanco(vote.Key),
                     Category = ScoreCategory.CorrectVote
                 });
             }
@@ -955,36 +986,6 @@ public class RoundManager : NetworkBehaviour
 
             yield return clientId;
         }
-    }
-
-    string BuildRoundSummary(int roundNumber, RoundConclusionType conclusionType, ulong? eliminatedPlayerId)
-    {
-        switch (conclusionType)
-        {
-            case RoundConclusionType.Elimination:
-                if (eliminatedPlayerId.HasValue)
-                {
-                    string name = GetDisplayName(eliminatedPlayerId.Value);
-                    return $"Ronda {roundNumber}: {name} fue eliminado";
-                }
-                return $"Ronda {roundNumber}: un jugador fue eliminado";
-            case RoundConclusionType.Tie:
-                return $"Ronda {roundNumber}: Empate en la votacion";
-            case RoundConclusionType.InvalidVotes:
-                return $"Ronda {roundNumber}: Los votos fueron invalidos";
-            case RoundConclusionType.NoVotes:
-                return $"Ronda {roundNumber}: Nadie voto";
-            default:
-                return $"Ronda {roundNumber}";
-        }
-    }
-
-    string BuildGameSummary(bool playersWin, string victoryReason)
-    {
-        string headline = playersWin ? "Victoria para los jugadores" : "Victoria para el Blanco";
-        if (string.IsNullOrWhiteSpace(victoryReason))
-            return headline;
-        return $"{headline} - {victoryReason}";
     }
 
     [ServerRpc(RequireOwnership = false)]

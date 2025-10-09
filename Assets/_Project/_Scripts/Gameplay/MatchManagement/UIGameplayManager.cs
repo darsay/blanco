@@ -648,7 +648,7 @@ public class UIGameplayManager : NetworkBehaviour
             builder.Append(round.MultiplierApplied.ToString("0.##"));
             builder.AppendLine();
 
-            string summary = round.Summary.ToString();
+            string summary = FormatRoundSummary(round);
             if (!string.IsNullOrWhiteSpace(summary))
             {
                 builder.Append("  ");
@@ -667,7 +667,7 @@ public class UIGameplayManager : NetworkBehaviour
                     gameTotals[evt.PlayerId] += points;
 
                     string playerName = GetDisplayName(evt.PlayerId);
-                    string reason = evt.Reason.ToString();
+                    string reason = FormatScoreEventReason(round, evt);
                     string categoryLabel = TranslateScoreCategory(evt.Category);
 
                     builder.Append("  - ");
@@ -698,6 +698,96 @@ public class UIGameplayManager : NetworkBehaviour
         }
 
         return entries;
+    }
+
+    string FormatRoundSummary(MatchManager.RoundScoreDto round)
+    {
+        string summary = round.Summary.ToString();
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            return summary;
+        }
+
+        return round.Phase switch
+        {
+            RoundManager.ScorePhase.RoundCompleted => FormatRoundCompletedSummary(round),
+            RoundManager.ScorePhase.GameResult => FormatGameResultSummary(round),
+            _ => string.Empty
+        };
+    }
+
+    string FormatRoundCompletedSummary(MatchManager.RoundScoreDto round)
+    {
+        var summary = round.RoundSummary;
+        switch (summary.ConclusionType)
+        {
+            case RoundManager.RoundConclusionType.Elimination:
+                if (summary.HasEliminatedPlayer)
+                {
+                    string eliminatedName = GetDisplayName(summary.EliminatedPlayerId);
+                    return $"Ronda {round.RoundNumber}: {eliminatedName} fue eliminado";
+                }
+                return $"Ronda {round.RoundNumber}: un jugador fue eliminado";
+            case RoundManager.RoundConclusionType.Tie:
+                return $"Ronda {round.RoundNumber}: Empate en la votacion";
+            case RoundManager.RoundConclusionType.InvalidVotes:
+                return $"Ronda {round.RoundNumber}: Los votos fueron invalidos";
+            case RoundManager.RoundConclusionType.NoVotes:
+                return $"Ronda {round.RoundNumber}: Nadie voto";
+            default:
+                return $"Ronda {round.RoundNumber}";
+        }
+    }
+
+    string FormatGameResultSummary(MatchManager.RoundScoreDto round)
+    {
+        var summary = round.GameSummary;
+        string headline = summary.PlayersWin ? "Victoria para los jugadores" : "Victoria para el Blanco";
+        string reason;
+        switch (summary.WinCondition)
+        {
+            case RoundManager.WinConditionType.Rounds:
+                reason = summary.AnyBlancoAliveSnapshot
+                    ? $"Se completaron {summary.RoundsCompletedSnapshot} rondas y aun queda al menos un Blanco vivo."
+                    : $"Se completaron {summary.RoundsCompletedSnapshot} rondas y no quedan Blancos con vida.";
+                break;
+            case RoundManager.WinConditionType.RemainingPlayers:
+                reason = summary.ActivePlayersSnapshot == 1
+                    ? "Solo queda un jugador activo en la mesa."
+                    : $"Solo quedan {summary.ActivePlayersSnapshot} jugadores activos.";
+                break;
+            default:
+                reason = string.Empty;
+                break;
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return headline;
+        }
+
+        return $"{headline} - {reason}";
+    }
+
+    string FormatScoreEventReason(MatchManager.RoundScoreDto round, MatchManager.RoundScoreEventDto evt)
+    {
+        string reason = evt.Reason.ToString();
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            return reason;
+        }
+
+        switch (evt.Category)
+        {
+            case RoundManager.ScoreCategory.Survival:
+                return $"Sobrevivio la ronda {round.RoundNumber}";
+            case RoundManager.ScoreCategory.CorrectVote:
+                return $"Voto acertado en la ronda {round.RoundNumber}";
+            case RoundManager.ScoreCategory.GameWin:
+                return evt.IsBlanco ? "Gano la partida como Blanco" : "Gano la partida como jugador";
+            default:
+                return string.Empty;
+        }
     }
 
     string BuildGameTotalsText(Dictionary<ulong, int> gameTotals)

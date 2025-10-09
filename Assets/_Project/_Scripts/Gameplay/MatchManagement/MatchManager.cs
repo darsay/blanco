@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Blanco.Networking;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -46,6 +47,7 @@ public class MatchManager : NetworkBehaviour
         public ulong PlayerId;
         public int BasePoints;
         public int FinalPoints;
+        public bool IsBlanco;
         public string Reason;
         public RoundManager.ScoreCategory Category;
     }
@@ -56,6 +58,8 @@ public class MatchManager : NetworkBehaviour
         public int RoundNumber;
         public RoundManager.ScorePhase Phase;
         public float MultiplierApplied;
+        public RoundManager.RoundSummaryData RoundSummary;
+        public RoundManager.GameResultSummaryData GameSummary;
         public string Summary;
         public List<ScoreEventReport> Events = new();
     }
@@ -75,6 +79,7 @@ public class MatchManager : NetworkBehaviour
         public ulong PlayerId;
         public int BasePoints;
         public int FinalPoints;
+        public bool IsBlanco;
         public FixedString128Bytes Reason;
         public RoundManager.ScoreCategory Category;
 
@@ -83,6 +88,7 @@ public class MatchManager : NetworkBehaviour
             serializer.SerializeValue(ref PlayerId);
             serializer.SerializeValue(ref BasePoints);
             serializer.SerializeValue(ref FinalPoints);
+            serializer.SerializeValue(ref IsBlanco);
             serializer.SerializeValue(ref Reason);
             serializer.SerializeValue(ref Category);
         }
@@ -93,6 +99,8 @@ public class MatchManager : NetworkBehaviour
         public int RoundNumber;
         public RoundManager.ScorePhase Phase;
         public float MultiplierApplied;
+        public RoundManager.RoundSummaryData RoundSummary;
+        public RoundManager.GameResultSummaryData GameSummary;
         public FixedString128Bytes Summary;
         public List<RoundScoreEventDto> Events;
 
@@ -101,6 +109,23 @@ public class MatchManager : NetworkBehaviour
             serializer.SerializeValue(ref RoundNumber);
             serializer.SerializeValue(ref Phase);
             serializer.SerializeValue(ref MultiplierApplied);
+            var conclusion = RoundSummary.ConclusionType;
+            serializer.SerializeValue(ref conclusion);
+            var hasEliminated = RoundSummary.HasEliminatedPlayer;
+            serializer.SerializeValue(ref hasEliminated);
+            ulong eliminatedId = RoundSummary.EliminatedPlayerId;
+            serializer.SerializeValue(ref eliminatedId);
+
+            var playersWin = GameSummary.PlayersWin;
+            serializer.SerializeValue(ref playersWin);
+            var winCondition = GameSummary.WinCondition;
+            serializer.SerializeValue(ref winCondition);
+            int roundsSnapshot = GameSummary.RoundsCompletedSnapshot;
+            serializer.SerializeValue(ref roundsSnapshot);
+            int activePlayersSnapshot = GameSummary.ActivePlayersSnapshot;
+            serializer.SerializeValue(ref activePlayersSnapshot);
+            var anyBlancoAliveSnapshot = GameSummary.AnyBlancoAliveSnapshot;
+            serializer.SerializeValue(ref anyBlancoAliveSnapshot);
             serializer.SerializeValue(ref Summary);
 
             int count = Events != null ? Events.Count : 0;
@@ -108,6 +133,14 @@ public class MatchManager : NetworkBehaviour
 
             if (serializer.IsReader)
             {
+                RoundSummary.ConclusionType = conclusion;
+                RoundSummary.HasEliminatedPlayer = hasEliminated;
+                RoundSummary.EliminatedPlayerId = eliminatedId;
+                GameSummary.PlayersWin = playersWin;
+                GameSummary.WinCondition = winCondition;
+                GameSummary.RoundsCompletedSnapshot = roundsSnapshot;
+                GameSummary.ActivePlayersSnapshot = activePlayersSnapshot;
+                GameSummary.AnyBlancoAliveSnapshot = anyBlancoAliveSnapshot;
                 Events ??= new List<RoundScoreEventDto>(count);
                 Events.Clear();
                 if (Events.Capacity < count)
@@ -410,18 +443,22 @@ public class MatchManager : NetworkBehaviour
         }
 
         float multiplier = GetCurrentGameMultiplier();
+        string summaryText = BuildRoundSummaryText(report);
         var processed = new RoundScoreDetails
         {
             RoundNumber = report.RoundNumber,
             Phase = report.Phase,
-            Summary = report.Summary,
-            MultiplierApplied = multiplier
+            Summary = summaryText,
+            MultiplierApplied = multiplier,
+            RoundSummary = report.RoundSummary,
+            GameSummary = report.GameSummary
         };
 
         foreach (var evt in report.Events)
         {
             int basePoints = evt.Points;
             int finalPoints = Mathf.RoundToInt(basePoints * multiplier);
+            string reasonText = BuildScoreEventReasonText(report, evt);
 
             int existing = playersAndScores.TryGetValue(evt.PlayerId, out var stored) ? stored : 0;
             SetPlayerScore(evt.PlayerId, existing + finalPoints);
@@ -431,13 +468,14 @@ public class MatchManager : NetworkBehaviour
                 PlayerId = evt.PlayerId,
                 BasePoints = basePoints,
                 FinalPoints = finalPoints,
-                Reason = evt.Reason,
+                IsBlanco = evt.IsBlanco,
+                Reason = reasonText,
                 Category = evt.Category
             });
 
             if (logScoreEvents)
             {
-                Debug.Log($"[MatchManager] Game {currentGameIndex + 1} round {report.RoundNumber}: player {evt.PlayerId} +{finalPoints} points (base {basePoints}) for {evt.Reason}.");
+                Debug.Log($"[MatchManager] Game {currentGameIndex + 1} round {report.RoundNumber}: player {evt.PlayerId} +{finalPoints} points (base {basePoints}) for {reasonText}.");
             }
         }
 
@@ -510,6 +548,8 @@ public class MatchManager : NetworkBehaviour
                 RoundNumber = round.RoundNumber,
                 Phase = round.Phase,
                 MultiplierApplied = round.MultiplierApplied,
+                RoundSummary = round.RoundSummary,
+                GameSummary = round.GameSummary,
                 Events = new List<RoundScoreEventDto>(round.Events.Count)
             };
 
@@ -523,7 +563,8 @@ public class MatchManager : NetworkBehaviour
                     PlayerId = evt.PlayerId,
                     BasePoints = evt.BasePoints,
                     FinalPoints = evt.FinalPoints,
-                    Category = evt.Category
+                    Category = evt.Category,
+                    IsBlanco = evt.IsBlanco
                 };
                 eventDto.Reason = evt.Reason ?? string.Empty;
                 dto.Events.Add(eventDto);
@@ -546,6 +587,103 @@ public class MatchManager : NetworkBehaviour
 
         float stepDuration = Mathf.Max(0.1f, scoreboardStepDuration);
         return stageCount * stepDuration;
+    }
+
+    string BuildRoundSummaryText(RoundManager.RoundScoreReport report)
+    {
+        if (report == null)
+            return string.Empty;
+
+        return report.Phase switch
+        {
+            RoundManager.ScorePhase.RoundCompleted => BuildRoundCompletedSummary(report.RoundNumber, report.RoundSummary),
+            RoundManager.ScorePhase.GameResult => BuildGameResultSummary(report.GameSummary),
+            _ => string.Empty
+        };
+    }
+
+    string BuildRoundCompletedSummary(int roundNumber, RoundManager.RoundSummaryData summary)
+    {
+        switch (summary.ConclusionType)
+        {
+            case RoundManager.RoundConclusionType.Elimination:
+                if (summary.HasEliminatedPlayer)
+                {
+                    string name = GetDisplayName(summary.EliminatedPlayerId);
+                    return $"Ronda {roundNumber}: {name} fue eliminado";
+                }
+                return $"Ronda {roundNumber}: un jugador fue eliminado";
+            case RoundManager.RoundConclusionType.Tie:
+                return $"Ronda {roundNumber}: Empate en la votacion";
+            case RoundManager.RoundConclusionType.InvalidVotes:
+                return $"Ronda {roundNumber}: Los votos fueron invalidos";
+            case RoundManager.RoundConclusionType.NoVotes:
+                return $"Ronda {roundNumber}: Nadie voto";
+            default:
+                return $"Ronda {roundNumber}";
+        }
+    }
+
+    string BuildGameResultSummary(RoundManager.GameResultSummaryData summary)
+    {
+        string headline = summary.PlayersWin ? "Victoria para los jugadores" : "Victoria para el Blanco";
+        string reason;
+        switch (summary.WinCondition)
+        {
+            case RoundManager.WinConditionType.Rounds:
+                reason = summary.AnyBlancoAliveSnapshot
+                    ? $"Se completaron {summary.RoundsCompletedSnapshot} rondas y aun queda al menos un Blanco vivo."
+                    : $"Se completaron {summary.RoundsCompletedSnapshot} rondas y no quedan Blancos con vida.";
+                break;
+            case RoundManager.WinConditionType.RemainingPlayers:
+                reason = summary.ActivePlayersSnapshot == 1
+                    ? "Solo queda un jugador activo en la mesa."
+                    : $"Solo quedan {summary.ActivePlayersSnapshot} jugadores activos.";
+                break;
+            default:
+                reason = string.Empty;
+                break;
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+            return headline;
+        return $"{headline} - {reason}";
+    }
+
+    string BuildScoreEventReasonText(RoundManager.RoundScoreReport report, RoundManager.ScoreEvent evt)
+    {
+        switch (evt.Category)
+        {
+            case RoundManager.ScoreCategory.Survival:
+                return $"Sobrevivio la ronda {report.RoundNumber}";
+            case RoundManager.ScoreCategory.CorrectVote:
+                return $"Voto acertado en la ronda {report.RoundNumber}";
+            case RoundManager.ScoreCategory.GameWin:
+                return evt.IsBlanco ? "Gano la partida como Blanco" : "Gano la partida como jugador";
+            default:
+                return string.Empty;
+        }
+    }
+
+    string GetDisplayName(ulong clientId)
+    {
+        if (LobbyManager.Instance != null)
+        {
+            try
+            {
+                var playerInfo = LobbyManager.Instance.GetPlayerInfo(clientId);
+                if (!playerInfo.playerName.IsEmpty)
+                {
+                    return playerInfo.playerName.ToString();
+                }
+            }
+            catch
+            {
+                // Ignorar lookup fallido
+            }
+        }
+
+        return $"Jugador {clientId}";
     }
 
     IEnumerator HandlePostGameSequence(float waitDuration, bool isFinalGame)
@@ -597,7 +735,9 @@ public class MatchManager : NetworkBehaviour
                 RoundNumber = round.RoundNumber,
                 Phase = round.Phase,
                 MultiplierApplied = round.MultiplierApplied,
-                Summary = round.Summary
+                Summary = round.Summary,
+                RoundSummary = round.RoundSummary,
+                GameSummary = round.GameSummary
             };
 
             foreach (var evt in round.Events)
@@ -607,6 +747,7 @@ public class MatchManager : NetworkBehaviour
                     PlayerId = evt.PlayerId,
                     BasePoints = evt.BasePoints,
                     FinalPoints = evt.FinalPoints,
+                    IsBlanco = evt.IsBlanco,
                     Reason = evt.Reason,
                     Category = evt.Category
                 });
