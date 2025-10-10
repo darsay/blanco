@@ -321,8 +321,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+    rgba: 4278190335
+  m_fontColor: {r: 1, g: 0, b: 0, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1223,8 +1223,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 456160012}
-  - component: {fileID: 456160013}
   - component: {fileID: 456160014}
+  - component: {fileID: 456160013}
   m_Layer: 0
   m_Name: UI Manager
   m_TagString: Untagged
