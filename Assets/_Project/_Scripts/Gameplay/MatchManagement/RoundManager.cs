@@ -126,6 +126,8 @@ public class RoundManager : NetworkBehaviour
 
 
     private readonly HashSet<ulong> eliminatedPlayers = new();
+    private int currentStartingOrderSlot = -1;
+    private static readonly int[] SeatTurnOrder = { 0, 4, 3, 6, 1, 5, 2, 7 };
     private readonly NetworkList<ulong> eliminatedPlayersSync = new();
     private readonly HashSet<ulong> eliminatedPlayersCache = new();
     private bool blancosAssignedThisMatch;
@@ -238,6 +240,7 @@ public class RoundManager : NetworkBehaviour
         playerVotes.Clear();
         currentGameScoreReports.Clear();
         chosenWord.Value = default;
+        currentStartingOrderSlot = -1;
 
         SpawnAllGhosts();
 
@@ -362,7 +365,8 @@ public class RoundManager : NetworkBehaviour
 
     IEnumerator ShowCardsCoroutine()
     {
-        foreach (var client in GetActiveClients())
+        var orderedClients = GetActiveClientsInSeatingOrder();
+        foreach (var client in orderedClients)
         {
             var player = client.PlayerObject.GetComponent<PlayerController>();
             if (player == null)
@@ -382,9 +386,9 @@ public class RoundManager : NetworkBehaviour
     IEnumerator SayWordCoroutine()
     {
         currentState.Value = RoundState.SayWord;
-        var randomizedClients = GetActiveClients().OrderBy(_ => UnityEngine.Random.value).ToList();
+        var orderedClients = GetActiveClientsInSeatingOrder();
 
-        foreach (var client in randomizedClients)
+        foreach (var client in orderedClients)
         {
             var player = client.PlayerObject.GetComponent<PlayerController>();
             if (player == null)
@@ -1336,6 +1340,94 @@ public class RoundManager : NetworkBehaviour
 
         return NetworkManager.Singleton.ConnectedClientsList
             .Where(client => client.PlayerObject != null && !eliminatedPlayers.Contains(client.ClientId));
+    }
+
+    int GetSeatTurnOrderSlot(int seatIndex)
+    {
+        if (seatIndex < 0)
+            return SeatTurnOrder.Length + 500;
+
+        for (int i = 0; i < SeatTurnOrder.Length; i++)
+        {
+            if (SeatTurnOrder[i] == seatIndex)
+                return i;
+        }
+
+        return SeatTurnOrder.Length + seatIndex;
+    }
+
+    List<NetworkClient> GetActiveClientsInSeatingOrder()
+    {
+        var activeClients = GetActiveClients().ToList();
+        if (activeClients.Count == 0)
+            return activeClients;
+
+        var playerSpawner = PlayerSpawner.Instance;
+        var orderedEntries = new List<(NetworkClient client, int seatIndex, int orderSlot)>(activeClients.Count);
+        int fallbackOrderBase = SeatTurnOrder.Length + 1000;
+        int fallbackCounter = 0;
+
+        foreach (var client in activeClients)
+        {
+            int seatIndex = -1;
+            int orderSlot;
+
+            if (playerSpawner != null && playerSpawner.TryGetSeatIndex(client.ClientId, out int assignedSeat))
+            {
+                seatIndex = assignedSeat;
+                orderSlot = GetSeatTurnOrderSlot(seatIndex);
+            }
+            else
+            {
+                orderSlot = fallbackOrderBase + fallbackCounter;
+                fallbackCounter++;
+            }
+
+            orderedEntries.Add((client, seatIndex, orderSlot));
+        }
+
+        orderedEntries.Sort((a, b) =>
+        {
+            int comparison = a.orderSlot.CompareTo(b.orderSlot);
+            if (comparison != 0)
+                return comparison;
+
+            comparison = a.seatIndex.CompareTo(b.seatIndex);
+            if (comparison != 0)
+                return comparison;
+
+            return a.client.ClientId.CompareTo(b.client.ClientId);
+        });
+
+        if (orderedEntries.Count == 0)
+            return new List<NetworkClient>();
+
+        if (currentStartingOrderSlot < 0)
+        {
+            var randomEntry = orderedEntries[UnityEngine.Random.Range(0, orderedEntries.Count)];
+            currentStartingOrderSlot = randomEntry.orderSlot;
+        }
+
+        int startIndex = orderedEntries.FindIndex(entry => entry.orderSlot == currentStartingOrderSlot);
+        if (startIndex < 0)
+        {
+            startIndex = orderedEntries.FindIndex(entry => entry.orderSlot > currentStartingOrderSlot);
+            if (startIndex < 0)
+            {
+                startIndex = 0;
+            }
+        }
+
+        currentStartingOrderSlot = orderedEntries[startIndex].orderSlot;
+
+        var orderedClients = new List<NetworkClient>(orderedEntries.Count);
+        for (int i = 0; i < orderedEntries.Count; i++)
+        {
+            var entry = orderedEntries[(startIndex + i) % orderedEntries.Count];
+            orderedClients.Add(entry.client);
+        }
+
+        return orderedClients;
     }
 
     string GetDisplayName(ulong clientId)

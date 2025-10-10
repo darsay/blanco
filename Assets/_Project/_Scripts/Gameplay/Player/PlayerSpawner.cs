@@ -13,6 +13,7 @@ public class PlayerSpawner : NetworkBehaviour
     [SerializeField] private PlayerController playerPrefab;
     private Blanco.Networking.LobbyManager lobbyManager;
     private int nextSpawnIndex = 0;
+    private readonly Dictionary<ulong, int> seatAssignments = new();
 
     private void Awake()
     {
@@ -35,16 +36,18 @@ public class PlayerSpawner : NetworkBehaviour
         {
             SpawnPlayer(0);
             NetworkManager.Singleton.OnClientConnectedCallback += SpawnPlayer;
+            NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
             Debug.Log("✅ PlayerSpawner suscrito a OnClientConnectedCallback");
         }
     }
 
     private void OnDisable()
     {
-        if (NetworkManager.Singleton.IsHost)
-        {
-            NetworkManager.Singleton.OnClientConnectedCallback -= SpawnPlayer;
-        }
+        if (NetworkManager.Singleton == null)
+            return;
+
+        NetworkManager.Singleton.OnClientConnectedCallback -= SpawnPlayer;
+        NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnected;
     }
 
     public void SpawnPlayer(ulong networkId)
@@ -76,7 +79,7 @@ public class PlayerSpawner : NetworkBehaviour
             return;
         }
 
-        Transform spawnPoint = GetNextSpawnPoint();
+        Transform spawnPoint = GetSpawnPointForPlayer(player.clientId);
         Debug.Log($"📍 Spawn point: {spawnPoint.name}");
 
         GameObject playerInstance = Instantiate(playerPrefab.gameObject, spawnPoint.position, spawnPoint.rotation);
@@ -90,16 +93,77 @@ public class PlayerSpawner : NetworkBehaviour
         Debug.Log($"✅ Player spawnado exitosamente para {player.playerName}");
     }
 
-    private Transform GetNextSpawnPoint()
+    private Transform GetSpawnPointForPlayer(ulong clientId)
+    {
+        if (seatAssignments.TryGetValue(clientId, out int seatIndex))
+        {
+            if (seatIndex >= 0 && seatIndex < spawnPoints.Count)
+            {
+                return spawnPoints[seatIndex];
+            }
+
+            seatAssignments.Remove(clientId);
+        }
+
+        return AssignNextAvailableSpawnPoint(clientId);
+    }
+
+    private Transform AssignNextAvailableSpawnPoint(ulong clientId)
     {
         if (spawnPoints == null || spawnPoints.Count == 0)
         {
             Debug.LogError("❌ No hay spawn points configurados!");
-            return transform; // Fallback
+            return transform;
         }
-        
-        Transform point = spawnPoints[nextSpawnIndex];
-        nextSpawnIndex = (nextSpawnIndex + 1) % spawnPoints.Count;
-        return point;
+
+        return UseSequentialSpawn(clientId);
+    }
+
+    private Transform UseSequentialSpawn(ulong clientId)
+    {
+        int seatIndex = GetNextSequentialSeat();
+        seatAssignments[clientId] = seatIndex;
+        return spawnPoints[seatIndex];
+    }
+
+    private int GetNextSequentialSeat()
+    {
+        if (spawnPoints == null || spawnPoints.Count == 0)
+            return 0;
+
+        for (int i = 0; i < spawnPoints.Count; i++)
+        {
+            int seatIndex = nextSpawnIndex % spawnPoints.Count;
+            nextSpawnIndex = (nextSpawnIndex + 1) % spawnPoints.Count;
+
+            if (IsSeatAvailable(seatIndex))
+            {
+                return seatIndex;
+            }
+        }
+
+        Debug.LogWarning("⚠️ No hay asientos disponibles. Usando asiento 0 por defecto.");
+        return 0;
+    }
+
+    private bool IsSeatAvailable(int seatIndex)
+    {
+        foreach (var assignment in seatAssignments.Values)
+        {
+            if (assignment == seatIndex)
+                return false;
+        }
+
+        return true;
+    }
+
+    private void HandleClientDisconnected(ulong clientId)
+    {
+        seatAssignments.Remove(clientId);
+    }
+
+    public bool TryGetSeatIndex(ulong clientId, out int seatIndex)
+    {
+        return seatAssignments.TryGetValue(clientId, out seatIndex);
     }
 }
