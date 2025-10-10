@@ -8,12 +8,14 @@ using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
 using Unity.Services.Vivox;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine.SceneManagement;
 using Unity.Collections;
 using static Blanco.Networking.LobbyManager;
 using MoreMountains.Tools;
+using Blanco.UI;
 
 namespace Blanco.Networking
 {
@@ -35,6 +37,43 @@ namespace Blanco.Networking
         private float lastHeartbeatTime = 0f;
         private float heartbeatInterval = 10f; // Verificar cada 5 segundos
         private float hostTimeout = 20f; // Host ausente por más de 10 segundos = desconectado
+        private readonly HashSet<ulong> pendingJoinRejections = new();
+        private const string MatchInProgressJoinMessage = "Partida empezada, no puedes unirte en este momento";
+        private LobbyState lastLobbyStateSentToService = LobbyState.Waiting;
+
+        public enum LobbyJoinError
+        {
+            None,
+            InvalidCode,
+            LobbyClosed,
+            LobbyFull,
+            AuthenticationFailed,
+            RelayFailed,
+            Unknown
+        }
+
+        public readonly struct LobbyJoinResult
+        {
+            public bool Success { get; }
+            public LobbyJoinError Error { get; }
+            public string Message { get; }
+
+            public LobbyJoinResult(bool success, LobbyJoinError error, string message)
+            {
+                Success = success;
+                Error = error;
+                Message = message;
+            }
+
+            public static LobbyJoinResult Ok() => new(true, LobbyJoinError.None, null);
+            public static LobbyJoinResult Fail(LobbyJoinError error, string message)
+            {
+                string finalMessage = string.IsNullOrWhiteSpace(message)
+                    ? "No se pudo unirse al lobby."
+                    : message;
+                return new LobbyJoinResult(false, error, finalMessage);
+            }
+        }
         
         // NetworkVariables para sincronizar datos del lobby
         private NetworkVariable<LobbyState> lobbyState = new NetworkVariable<LobbyState>(LobbyState.Waiting);
@@ -142,6 +181,7 @@ namespace Blanco.Networking
             if (showDebugLogs)
                 Debug.Log("🌐 LobbyManager iniciado en red");
 
+            lobbyState.OnValueChanged += HandleLobbyStateValueChanged;
             players.OnListChanged += HandlePlayersListChanged;
             if (!NetworkManager.Singleton.IsHost)
             {
@@ -156,12 +196,62 @@ namespace Blanco.Networking
                 // Heartbeat del host DESHABILITADO temporalmente para evitar rate limit
                 StartCoroutine(HostHeartbeat());
             }
+
+            HandleLobbyStateValueChanged(lobbyState.Value, lobbyState.Value);
         }
 
         public override void OnNetworkDespawn()
         {
+            lobbyState.OnValueChanged -= HandleLobbyStateValueChanged;
             players.OnListChanged -= HandlePlayersListChanged;
             base.OnNetworkDespawn();
+        }
+
+        private void HandleLobbyStateValueChanged(LobbyState previousState, LobbyState newState)
+        {
+            if (showDebugLogs && previousState != newState)
+                Debug.Log($"Lobby state changed: {previousState} -> {newState}");
+            else if (showDebugLogs && previousState == newState)
+                Debug.Log($"Lobby state initialized: {newState}");
+
+            OnLobbyStateChanged?.Invoke(newState);
+        }
+
+        private void ApplyLobbyStateToService(LobbyState newState)
+        {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsHost)
+                return;
+
+            if (CurrentLobby == null)
+                return;
+
+            if (lastLobbyStateSentToService == newState)
+                return;
+
+            lastLobbyStateSentToService = newState;
+            bool shouldLock = newState != LobbyState.Waiting;
+            _ = UpdateLobbyLockStateAsync(shouldLock);
+        }
+
+        private async System.Threading.Tasks.Task UpdateLobbyLockStateAsync(bool shouldLock)
+        {
+            try
+            {
+                var updateOptions = new UpdateLobbyOptions
+                {
+                    IsLocked = shouldLock
+                };
+
+                CurrentLobby = await LobbyService.Instance.UpdateLobbyAsync(CurrentLobby.Id, updateOptions);
+
+                if (showDebugLogs)
+                    Debug.Log(shouldLock ? "Lobby locked for new joins." : "Lobby unlocked; players may join.");
+            }
+            catch (Exception e)
+            {
+                if (showDebugLogs)
+                    Debug.LogWarning($"Failed to {(shouldLock ? "lock" : "unlock")} lobby: {e.Message}");
+            }
         }
 
         private System.Collections.IEnumerator HostHeartbeat()
@@ -471,62 +561,116 @@ namespace Blanco.Networking
         
         #region Client - Unirse a Lobby
         
-        public async Task<bool> JoinLobby(string joinCode)
+        public async Task<LobbyJoinResult> JoinLobby(string joinCode)
         {
             try
             {
                 if (showDebugLogs)
-                    Debug.Log($"🔧 Uniéndose a lobby: {joinCode}");
+                    Debug.Log($"🔗 Uniéndose a lobby: {joinCode}");
                 
-                // Autenticarse si no está autenticado
                 if (!Authentication.IsSignedIn())
                 {
                     bool authSuccess = await Authentication.Login();
                     if (!authSuccess)
                     {
                         Debug.LogError("❌ No se pudo autenticar para unirse al lobby");
-                        return false;
+                        return LobbyJoinResult.Fail(LobbyJoinError.AuthenticationFailed, "No se pudo autenticar con los servicios de juego. Intenta iniciar sesión de nuevo.");
                     }
                 }
                 
-                // Unirse al lobby
-                CurrentLobby = await JoinLobbyByCode(joinCode);
-                if (CurrentLobby == null)
+                Lobby lobby;
+                try
                 {
-                    Debug.LogError("❌ No se pudo unirse al lobby");
-                    return false;
+                    lobby = await JoinLobbyByCode(joinCode);
+                }
+                catch (LobbyServiceException lobbyEx)
+                {
+                    return MapLobbyJoinException(lobbyEx);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"❌ Error inesperado al localizar el lobby: {ex.Message}");
+                    return LobbyJoinResult.Fail(LobbyJoinError.Unknown, $"No se pudo unirse al lobby: {ex.Message}");
+                }
+
+                if (lobby == null)
+                {
+                    return LobbyJoinResult.Fail(LobbyJoinError.Unknown, "No se pudo unirse al lobby.");
                 }
                 
-                // Unirse al relay
-                bool relaySuccess = await JoinRelayAllocation(CurrentLobby);
+                bool relaySuccess = await JoinRelayAllocation(lobby);
                 if (!relaySuccess)
                 {
                     Debug.LogError("❌ No se pudo unirse al relay");
-                    return false;
+                    return LobbyJoinResult.Fail(LobbyJoinError.RelayFailed, "No se pudo conectar al relay del lobby.");
                 }
-                
-                // Guardar información del lobby
-                PlayerPrefs.SetString("LobbyCode", CurrentLobby.LobbyCode);
-                PlayerPrefs.SetString("LobbyId", CurrentLobby.Id);
+
+                CurrentLobby = lobby;
+
+                PlayerPrefs.SetString("LobbyCode", lobby.LobbyCode);
+                PlayerPrefs.SetString("LobbyId", lobby.Id);
                 PlayerPrefs.Save();
                 
                 if (showDebugLogs)
-                    Debug.Log($"✅ Unido exitosamente al lobby: {CurrentLobby.LobbyCode}");
+                    Debug.Log($"✅ Unido exitosamente al lobby: {lobby.LobbyCode}");
                 
-                // Conectar como cliente
                 NetworkManager.Singleton.StartClient();
-                
-                // El cliente se unirá a la escena del host automáticamente
                 Debug.Log("✅ Cliente conectado, uniéndose a la escena del host");
                 
-                return true;
+                return LobbyJoinResult.Ok();
             }
             catch (Exception e)
             {
                 Debug.LogError($"❌ Error al unirse al lobby: {e.Message}");
-                return false;
+                return LobbyJoinResult.Fail(LobbyJoinError.Unknown, $"No se pudo unirse al lobby: {e.Message}");
             }
         }
+
+        private LobbyJoinResult MapLobbyJoinException(LobbyServiceException exception)
+        {
+            if (showDebugLogs)
+                Debug.LogWarning($"❌ Falló la unión al lobby | Reason: {exception.Reason}, Code: {exception.ErrorCode} | {exception.Message}");
+
+            string reasonText = exception.Reason.ToString().ToLowerInvariant();
+            string messageText = exception.Message?.ToLowerInvariant() ?? string.Empty;
+
+            if (!string.IsNullOrEmpty(reasonText))
+            {
+                if (reasonText.Contains("notfound") || reasonText.Contains("invalid"))
+                {
+                    return LobbyJoinResult.Fail(LobbyJoinError.InvalidCode, "No se encontró ningún lobby con ese código. Verifica e inténtalo de nuevo.");
+                }
+
+                if (reasonText.Contains("full") || reasonText.Contains("limit"))
+                {
+                    return LobbyJoinResult.Fail(LobbyJoinError.LobbyFull, "El lobby ya alcanzó el número máximo de jugadores.");
+                }
+
+                if (reasonText.Contains("locked") || reasonText.Contains("progress") || reasonText.Contains("notjoinable"))
+                {
+                    return LobbyJoinResult.Fail(LobbyJoinError.LobbyClosed, MatchInProgressJoinMessage);
+                }
+            }
+
+            if (messageText.Contains("not") && messageText.Contains("found"))
+            {
+                return LobbyJoinResult.Fail(LobbyJoinError.InvalidCode, "No se encontró ningún lobby con ese código. Verifica e inténtalo de nuevo.");
+            }
+
+            if (messageText.Contains("full") || messageText.Contains("max") || messageText.Contains("limit"))
+            {
+                return LobbyJoinResult.Fail(LobbyJoinError.LobbyFull, "El lobby ya alcanzó el número máximo de jugadores.");
+            }
+
+            if (messageText.Contains("locked") || messageText.Contains("progress") || messageText.Contains("running"))
+            {
+                return LobbyJoinResult.Fail(LobbyJoinError.LobbyClosed, MatchInProgressJoinMessage);
+            }
+
+            return LobbyJoinResult.Fail(LobbyJoinError.Unknown, $"No se pudo unirse al lobby: {exception.Message}");
+        }
+
+
         
         private async Task<Lobby> JoinLobbyByCode(string joinCode)
         {
@@ -610,10 +754,15 @@ namespace Blanco.Networking
                 
                 return lobby;
             }
+            catch (LobbyServiceException e)
+            {
+                Debug.LogError($"❌ Error al unirse al lobby: {e.Message}");
+                throw;
+            }
             catch (Exception e)
             {
                 Debug.LogError($"❌ Error al unirse al lobby: {e.Message}");
-                return null;
+                throw;
             }
         }
         
@@ -653,36 +802,111 @@ namespace Blanco.Networking
         {
             if (showDebugLogs)
                 Debug.Log($"🔗 Cliente conectado: {clientId}");
-            
-            // Solo el servidor debe manejar los jugadores
-            if (NetworkManager.Singleton.IsHost)
+
+            bool isHostInstance = NetworkManager.Singleton.IsHost;
+
+            if (isHostInstance)
             {
+                bool isHostClient = clientId == NetworkManager.Singleton.LocalClientId;
+                if (!IsLobbyAcceptingPlayers() && !isHostClient)
+                {
+                    if (showDebugLogs)
+                        Debug.Log($"🚫 Rechazando conexión de {clientId} porque la partida está en curso.");
+                    RejectJoinAttempt(clientId);
+                    return;
+                }
+
                 if (showDebugLogs)
                     Debug.Log($"🔍 Servidor añadiendo jugador con clientId: {clientId}");
-                
-                // Añadir jugador inmediatamente con nombre temporal
+
                 string playerName = clientId == 0 ? "Host" : "Player joining...";
-                bool isHost = clientId == 0; // El primer cliente conectado es el host
+                bool isHost = clientId == 0;
                 AddPlayerDirectly(clientId, playerName, isHost);
 
-                // SIEMPRE actualizar nombres de manera asíncrona para todos los jugadores
-                // Esto es especialmente importante cuando re-entras al lobby
                 if (showDebugLogs)
-                    Debug.Log($"🔄 Iniciando actualización asíncrona de nombres para cliente {clientId}");
-                
-                // Actualizar nombres en segundo plano sin bloquear
+                    Debug.Log($"📝 Iniciando actualización asíncrona de nombres para cliente {clientId}");
+
                 _ = UpdatePlayerNamesAsync();
             }
-            
-            // Unirse al canal de voz solo si es el cliente local
+
             if (clientId == NetworkManager.Singleton.LocalClientId)
             {
+                if (!IsLobbyAcceptingPlayers() && !NetworkManager.Singleton.IsHost)
+                {
+                    if (showDebugLogs)
+                        Debug.Log("🔒 Lobby cerrado: omitiendo unión a canal de voz para el cliente local.");
+                    return;
+                }
+
                 await JoinLobbyVoiceChannel();
             }
         }
-        
+
+        private bool IsLobbyAcceptingPlayers()
+        {
+            return lobbyState.Value == LobbyState.Waiting;
+        }
+
+        public bool IsLobbyOpenForJoining()
+        {
+            return IsLobbyAcceptingPlayers();
+        }
+
+        private void RejectJoinAttempt(ulong clientId)
+        {
+            if (!pendingJoinRejections.Add(clientId))
+                return;
+
+            if (showDebugLogs)
+                Debug.Log($"🚫 Bloqueando intento de unión del cliente {clientId} porque la partida está en curso.");
+
+            var targetClientParams = new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams
+                {
+                    TargetClientIds = new[] { clientId }
+                }
+            };
+
+            NotifyJoinRejectedClientRpc(MatchInProgressJoinMessage, targetClientParams);
+            StartCoroutine(DisconnectClientAfterDelay(clientId, 0.75f));
+        }
+
+        private IEnumerator DisconnectClientAfterDelay(ulong clientId, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+            {
+                if (NetworkManager.Singleton.ConnectedClients.ContainsKey(clientId))
+                {
+                    NetworkManager.Singleton.DisconnectClient(clientId);
+                }
+            }
+
+            pendingJoinRejections.Remove(clientId);
+        }
+
+        [ClientRpc]
+        private void NotifyJoinRejectedClientRpc(string message, ClientRpcParams clientRpcParams = default)
+        {
+            if (showDebugLogs)
+                Debug.Log($"📢 Notificando rechazo de ingreso: {message}");
+
+            MenuUI menuUi = MenuUI.Instance ?? UnityEngine.Object.FindObjectOfType<MenuUI>();
+            if (menuUi != null)
+            {
+                menuUi.ShowJoinDeniedMessage(message);
+            }
+            else
+            {
+                Debug.LogWarning($"⚠️ No se encontró MenuUI para mostrar mensaje: {message}");
+            }
+        }
+
         private async void OnClientDisconnected(ulong clientId)
         {
+            pendingJoinRejections.Remove(clientId);
             if (showDebugLogs)
                 Debug.Log($"🔌 Cliente desconectado: {clientId}");
             
@@ -1307,11 +1531,14 @@ namespace Blanco.Networking
         
         public void SetLobbyState(LobbyState newState)
         {
-            if (NetworkManager.Singleton.IsServer)
-            {
-                lobbyState.Value = newState;
-                OnLobbyStateChanged?.Invoke(newState);
-            }
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+                return;
+
+            if (lobbyState.Value == newState)
+                return;
+
+            lobbyState.Value = newState;
+            ApplyLobbyStateToService(newState);
         }
         
         public bool IsHostPlayer()

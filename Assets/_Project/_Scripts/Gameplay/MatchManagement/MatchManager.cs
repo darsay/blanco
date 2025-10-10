@@ -280,6 +280,9 @@ public class MatchManager : NetworkBehaviour
         if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsHost)
             return;
 
+        if (LobbyManager.Instance != null && !LobbyManager.Instance.IsLobbyOpenForJoining() && clientId != NetworkManager.Singleton.LocalClientId)
+            return;
+
         if (!playersAndScores.ContainsKey(clientId))
         {
             SetPlayerScore(clientId, 0);
@@ -296,6 +299,7 @@ public class MatchManager : NetworkBehaviour
 
         ResetMatchState();
         currentState.Value = MatchState.Playing;
+        LobbyManager.Instance?.SetLobbyState(LobbyManager.LobbyState.InGame);
 
         HideGameScoreClientRpc();
         RoundManager.Instance?.StartGame();
@@ -776,6 +780,7 @@ public class MatchManager : NetworkBehaviour
             }
         }
 
+        LobbyManager.Instance?.SetLobbyState(LobbyManager.LobbyState.Waiting);
         ShowWaitingUI();
     }
 }

@@ -9,6 +9,8 @@ namespace Blanco.UI
 {
     public class MenuUI : NetworkBehaviour
     {
+        public static MenuUI Instance { get; private set; }
+        
         [Header("UI Panels")]
         [SerializeField] private GameObject mainPanel;
         [SerializeField] private GameObject createLobbyPanel;
@@ -44,6 +46,19 @@ namespace Blanco.UI
         
         private Blanco.Networking.LobbyManager lobbyManager;
         private bool isProcessing = false;
+
+        private void Awake()
+        {
+            Instance = this;
+        }
+        
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Instance = null;
+            }
+        }
         
         private void Start()
         {
@@ -223,6 +238,18 @@ namespace Blanco.UI
         {
             ShowMainPanel();
         }
+
+        public void ShowJoinDeniedMessage(string message)
+        {
+            isProcessing = false;
+            string formatted = message;
+            if (!string.IsNullOrWhiteSpace(formatted) && !formatted.StartsWith("❌"))
+            {
+                formatted = $"❌ {formatted}";
+            }
+
+            ShowErrorPanel(formatted);
+        }
         
         private async void OnJoinButtonClicked()
         {
@@ -251,16 +278,26 @@ namespace Blanco.UI
                 PlayerPrefs.Save();
                 
                 // Unirse al lobby
-                bool success = await lobbyManager.JoinLobby(lobbyCode);
+                var joinResult = await lobbyManager.JoinLobby(lobbyCode);
                 
-                if (success)
+                if (joinResult.Success)
                 {
                     // Cambiar a escena de lobby (se sincronizará con el host)
                     UnityEngine.SceneManagement.SceneManager.LoadScene("GameplayTest");
                 }
                 else
                 {
-                    ShowErrorPanel("❌ Error al unirse al lobby. Verifica el código e inténtalo de nuevo.");
+                    string message = joinResult.Message;
+                    if (string.IsNullOrWhiteSpace(message))
+                    {
+                        message = "❌ Error al unirse al lobby. Verifica el código e inténtalo de nuevo.";
+                    }
+                    else if (!message.StartsWith("❌"))
+                    {
+                        message = $"❌ {message}";
+                    }
+
+                    ShowErrorPanel(message);
                     isProcessing = false;
                 }
             }
